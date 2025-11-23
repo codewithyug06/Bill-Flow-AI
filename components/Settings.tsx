@@ -1,0 +1,134 @@
+
+import React, { useState, useEffect } from 'react';
+import { User } from '../types';
+import { Save, User as UserIcon, Building, Phone, CreditCard, MapPin, CheckCircle2 } from 'lucide-react';
+
+interface SettingsProps {
+  user: User;
+  onUpdateUser: (user: User) => void;
+}
+
+export const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser }) => {
+  const [formData, setFormData] = useState<User>(user);
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  useEffect(() => {
+    setFormData(user);
+  }, [user]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setFormData({ ...formData, [e.target.name]: e.target.value });
+  };
+
+  const handleSave = () => {
+    onUpdateUser(formData);
+    setShowSuccess(true);
+    setTimeout(() => setShowSuccess(false), 3000);
+  };
+
+  return (
+    <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
+      <header>
+        <h1 className="text-2xl font-bold text-gray-800">Settings</h1>
+        <p className="text-gray-500 text-sm">Manage your business profile and invoice details</p>
+      </header>
+
+      {showSuccess && (
+        <div className="bg-emerald-50 text-emerald-700 p-4 rounded-xl flex items-center gap-2 border border-emerald-100">
+          <CheckCircle2 className="w-5 h-5" />
+          <span className="font-medium">Settings updated successfully!</span>
+        </div>
+      )}
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+        <div className="p-6 border-b border-gray-100">
+           <h2 className="text-lg font-semibold text-gray-800">Business Profile</h2>
+           <p className="text-xs text-gray-500 mt-1">These details will be printed on your tax invoices.</p>
+        </div>
+        
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <Building className="w-4 h-4 text-gray-400" /> Business Name
+              </label>
+              <input
+                type="text"
+                name="businessName"
+                value={formData.businessName}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none"
+                placeholder="e.g. My Business Pvt Ltd"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <UserIcon className="w-4 h-4 text-gray-400" /> Owner Name
+              </label>
+              <input
+                type="text"
+                name="name"
+                value={formData.name}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none"
+                placeholder="Your Name"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <Phone className="w-4 h-4 text-gray-400" /> Contact Number
+              </label>
+              <input
+                type="text"
+                name="phone"
+                value={formData.phone}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none"
+                placeholder="e.g. 9876543210"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+                <CreditCard className="w-4 h-4 text-gray-400" /> GSTIN
+              </label>
+              <input
+                type="text"
+                name="gstin"
+                value={formData.gstin || ''}
+                onChange={handleChange}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none uppercase"
+                placeholder="e.g. 29ABCDE1234F1Z5"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-gray-400" /> Business Address
+            </label>
+            <textarea
+              name="address"
+              value={formData.address || ''}
+              onChange={handleChange}
+              rows={3}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none resize-none"
+              placeholder="Full address to be shown on invoice"
+            />
+          </div>
+        </div>
+
+        <div className="p-6 bg-gray-50 border-t border-gray-100 flex justify-end">
+          <button 
+            onClick={handleSave}
+            className="bg-teal-600 text-white px-6 py-2 rounded-lg font-medium hover:bg-teal-700 shadow-sm flex items-center gap-2 transition-colors"
+          >
+            <Save className="w-4 h-4" /> Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};

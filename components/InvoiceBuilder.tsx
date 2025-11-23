@@ -1,0 +1,447 @@
+
+import React, { useState, useEffect } from 'react';
+import { InvoiceItem, Party, Product, User, Invoice } from '../types';
+import { Plus, Trash2, FileText, Printer, Send, ChevronLeft, CheckCircle2, Download } from 'lucide-react';
+
+interface InvoiceBuilderProps {
+  parties?: Party[];
+  products: Product[];
+  onSaveInvoice: (invoice: Invoice) => void;
+  user?: User | null;
+}
+
+export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], products = [], onSaveInvoice, user }) => {
+  const [customer, setCustomer] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [invoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
+  const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [view, setView] = useState<'edit' | 'preview'>('edit');
+  const [showSaveSuccess, setShowSaveSuccess] = useState(false);
+  const [autoPrint, setAutoPrint] = useState(false);
+  const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Pending'>('Paid');
+
+  // Find Selected Party Details
+  const selectedParty = parties.find(p => p.name === customer);
+
+  const addItem = () => {
+    setItems([...items, {
+      productId: '', // Empty initially, will be filled when product is selected
+      productName: '',
+      quantity: 1,
+      price: 0,
+      total: 0
+    }]);
+  };
+
+  const updateItem = (index: number, field: keyof InvoiceItem, value: any) => {
+    const newItems = [...items];
+    
+    if (field === 'productName') {
+      // Auto-fill details if product exists
+      newItems[index].productName = value;
+      const product = products.find(p => p.name === value);
+      if (product) {
+        newItems[index].productId = product.id;
+        newItems[index].price = product.price;
+        newItems[index].total = newItems[index].quantity * product.price;
+      }
+    } else {
+      // @ts-ignore
+      newItems[index][field] = value;
+    }
+    
+    if (field === 'quantity' || field === 'price' || field === 'productName') {
+      newItems[index].total = newItems[index].quantity * newItems[index].price;
+    }
+    setItems(newItems);
+  };
+
+  const removeItem = (index: number) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+
+  const subtotal = items.reduce((sum, item) => sum + item.total, 0);
+  const tax = subtotal * 0.18; // 18% GST assumption
+  const total = subtotal + tax;
+
+  const handleSaveAndGenerate = (shouldPrint = false) => {
+    if (!customer) {
+      alert("Please enter a customer name");
+      return;
+    }
+    if (items.length === 0) {
+      alert("Please add at least one item");
+      return;
+    }
+    
+    const newInvoice: Invoice = {
+      id: Date.now().toString(),
+      invoiceNo,
+      date,
+      customerName: customer,
+      items,
+      subtotal,
+      tax,
+      total,
+      status: paymentStatus
+    };
+
+    onSaveInvoice(newInvoice);
+
+    setShowSaveSuccess(true);
+    if (shouldPrint) {
+      setAutoPrint(true);
+    }
+
+    setTimeout(() => {
+      setShowSaveSuccess(false);
+      setView('preview');
+    }, shouldPrint ? 500 : 1000); 
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  useEffect(() => {
+    if (view === 'preview' && autoPrint) {
+      const timer = setTimeout(() => {
+        window.print();
+        setAutoPrint(false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [view, autoPrint]);
+
+  return (
+    <div className="space-y-6">
+      {/* Toast Notification - Hidden in Print */}
+      {showSaveSuccess && (
+        <div className="fixed top-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-center gap-2 animate-in slide-in-from-top-5 print:hidden">
+          <CheckCircle2 className="w-5 h-5" />
+          <span className="font-medium">Invoice Saved & Stock Updated!</span>
+        </div>
+      )}
+
+      {/* Header */}
+      <div className="flex justify-between items-center print:hidden">
+        <div className="flex items-center gap-3">
+           {view === 'preview' && (
+             <button onClick={() => setView('edit')} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+               <ChevronLeft className="w-5 h-5 text-gray-600" />
+             </button>
+           )}
+           <h1 className="text-2xl font-bold text-gray-800">{view === 'edit' ? 'Create Sales Invoice' : 'Invoice Preview'}</h1>
+           <span className="px-3 py-1 bg-teal-50 text-teal-700 text-xs font-bold rounded-full border border-teal-100">INV #{invoiceNo}</span>
+        </div>
+        <div className="flex gap-2">
+           {view === 'edit' ? (
+             <button 
+                onClick={() => setView('preview')}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium transition-colors shadow-sm"
+             >
+                <FileText className="w-4 h-4" /> Preview
+             </button>
+           ) : (
+             <div className="flex gap-2">
+               <button 
+                  onClick={handlePrint}
+                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors shadow-sm"
+               >
+                  <Download className="w-4 h-4" /> Download
+               </button>
+               <button 
+                  onClick={handlePrint}
+                  className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium transition-colors shadow-sm"
+               >
+                  <Printer className="w-4 h-4" /> Print Invoice
+               </button>
+             </div>
+           )}
+        </div>
+      </div>
+
+      {view === 'edit' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
+          {/* Form Section */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+              <h2 className="text-sm font-bold text-gray-500 uppercase mb-4 tracking-wider">Bill To</h2>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">Customer Name</label>
+                   <input 
+                     list="customer-list"
+                     type="text" 
+                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                     placeholder="Search or add customer"
+                     value={customer}
+                     onChange={(e) => setCustomer(e.target.value)}
+                   />
+                   <datalist id="customer-list">
+                      {parties.filter(p => p.type === 'Customer' || p.type === 'Supplier').map(party => (
+                        <option key={party.id} value={party.name}>{party.phone}</option>
+                      ))}
+                   </datalist>
+                </div>
+                <div className="space-y-2">
+                   <label className="text-sm font-medium text-gray-700">Invoice Date</label>
+                   <input 
+                     type="date" 
+                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none"
+                     value={date}
+                     onChange={(e) => setDate(e.target.value)}
+                   />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+               <h2 className="text-sm font-bold text-gray-500 uppercase mb-4 tracking-wider">Items & Description</h2>
+               <div className="space-y-4">
+                 <div className="grid grid-cols-12 gap-4 text-xs font-bold text-gray-500 uppercase px-2">
+                   <div className="col-span-5">Item</div>
+                   <div className="col-span-2">Qty</div>
+                   <div className="col-span-2">Rate</div>
+                   <div className="col-span-2">Amount</div>
+                   <div className="col-span-1"></div>
+                 </div>
+                 
+                 {items.map((item, index) => (
+                   <div key={index} className="grid grid-cols-12 gap-4 items-center">
+                     <div className="col-span-5">
+                       <input 
+                         list={`products-list-${index}`}
+                         type="text" 
+                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none"
+                         placeholder="Product name"
+                         value={item.productName}
+                         onChange={(e) => updateItem(index, 'productName', e.target.value)}
+                       />
+                       <datalist id={`products-list-${index}`}>
+                          {products.map(p => (
+                             <option key={p.id} value={p.name}>Stock: {p.stock} | ₹{p.price}</option>
+                          ))}
+                       </datalist>
+                     </div>
+                     <div className="col-span-2">
+                       <input 
+                         type="number" 
+                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none"
+                         value={item.quantity}
+                         min="1"
+                         onChange={(e) => updateItem(index, 'quantity', parseInt(e.target.value))}
+                       />
+                     </div>
+                     <div className="col-span-2">
+                       <input 
+                         type="number" 
+                         className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none"
+                         value={item.price}
+                         min="0"
+                         onChange={(e) => updateItem(index, 'price', parseFloat(e.target.value))}
+                       />
+                     </div>
+                     <div className="col-span-2 text-gray-800 font-medium px-2">
+                       ₹{item.total.toFixed(2)}
+                     </div>
+                     <div className="col-span-1 flex justify-center">
+                       <button onClick={() => removeItem(index)} className="text-red-400 hover:text-red-600 p-2 hover:bg-red-50 rounded">
+                         <Trash2 className="w-4 h-4" />
+                       </button>
+                     </div>
+                   </div>
+                 ))}
+
+                 <button 
+                   onClick={addItem}
+                   className="w-full py-3 border-2 border-dashed border-teal-200 rounded-lg text-teal-600 font-medium hover:bg-teal-50 transition-colors flex items-center justify-center gap-2"
+                 >
+                   <Plus className="w-4 h-4" /> Add Item
+                 </button>
+               </div>
+            </div>
+          </div>
+
+          {/* Summary / Save Section */}
+          <div className="lg:col-span-1">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 sticky top-6">
+               <h2 className="text-sm font-bold text-gray-500 uppercase mb-4 tracking-wider">Payment Details</h2>
+               <div className="space-y-3 text-sm border-b border-gray-100 pb-4 mb-4">
+                 <div className="flex justify-between text-gray-600">
+                   <span>Subtotal</span>
+                   <span>₹{subtotal.toFixed(2)}</span>
+                 </div>
+                 <div className="flex justify-between text-gray-600">
+                   <span>Tax (18% GST)</span>
+                   <span>₹{tax.toFixed(2)}</span>
+                 </div>
+               </div>
+               <div className="flex justify-between items-center text-xl font-bold text-gray-900 mb-6">
+                 <span>Total Amount</span>
+                 <span>₹{total.toFixed(2)}</span>
+               </div>
+               
+               <div className="mb-6">
+                   <label className="text-sm font-medium text-gray-700 block mb-2">Payment Status</label>
+                   <div className="flex bg-gray-100 rounded-lg p-1">
+                      <button 
+                        onClick={() => setPaymentStatus('Paid')}
+                        className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${paymentStatus === 'Paid' ? 'bg-white text-teal-700 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      >
+                        Paid
+                      </button>
+                      <button 
+                        onClick={() => setPaymentStatus('Pending')}
+                        className={`flex-1 py-1.5 text-sm font-medium rounded-md transition-all ${paymentStatus === 'Pending' ? 'bg-white text-orange-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                      >
+                        Pending
+                      </button>
+                   </div>
+               </div>
+
+               <button 
+                  onClick={() => handleSaveAndGenerate(false)}
+                  className="w-full bg-teal-600 text-white py-3 rounded-lg font-medium hover:bg-teal-700 shadow-lg shadow-teal-200 transition-all flex justify-center items-center gap-2 mb-3"
+               >
+                  <Send className="w-4 h-4" /> Save & Generate
+               </button>
+               <button 
+                  onClick={() => handleSaveAndGenerate(true)}
+                  className="w-full bg-white border border-teal-600 text-teal-700 py-3 rounded-lg font-medium hover:bg-teal-50 transition-all flex justify-center items-center gap-2"
+               >
+                  <Printer className="w-4 h-4" /> Save & Print
+               </button>
+            </div>
+          </div>
+        </div>
+      ) : (
+        /* Preview & Print Template */
+        <div className="flex justify-center animate-in zoom-in-95 duration-300 print:block">
+           <div className="bg-white shadow-2xl rounded-none w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 print:shadow-none print:w-full print:max-w-none print:p-0">
+              
+              {/* Header */}
+              <div className="flex justify-between items-start border-b-2 border-gray-800 pb-6 mb-6">
+                 <div>
+                    <h1 className="text-3xl font-bold text-gray-900 mb-2">TAX INVOICE</h1>
+                    <div className="text-sm text-gray-600 space-y-1">
+                       <p className="font-bold text-lg text-gray-800 uppercase">{user?.businessName || 'Your Business Name'}</p>
+                       <p className="font-medium">Owner: {user?.name}</p>
+                       <p className="whitespace-pre-line">{user?.address || 'Your Business Address'}</p>
+                       <p>GSTIN: <span className="font-semibold">{user?.gstin || '----------------'}</span></p>
+                       <p>Phone: {user?.phone}</p>
+                    </div>
+                 </div>
+                 <div className="text-right">
+                    <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 border border-gray-200 mb-4 ml-auto">
+                       <span className="text-xs">Logo</span>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Bill To & Invoice Details */}
+              <div className="flex justify-between mb-8">
+                 <div className="w-1/2">
+                    <h3 className="text-gray-500 font-bold uppercase text-xs mb-2">Bill To</h3>
+                    <p className="font-bold text-lg text-gray-900">{customer || 'Customer Name'}</p>
+                    {selectedParty && (
+                      <div className="text-sm text-gray-600 mt-1 space-y-1">
+                        {selectedParty.address && <p className="whitespace-pre-line">{selectedParty.address}</p>}
+                        {selectedParty.gstin && <p>GSTIN: <span className="font-semibold">{selectedParty.gstin}</span></p>}
+                        <p>Phone: {selectedParty.phone}</p>
+                      </div>
+                    )}
+                 </div>
+                 <div className="text-right space-y-2">
+                    <div className="flex gap-8 justify-between">
+                       <span className="text-gray-500 font-medium text-sm">Invoice No:</span>
+                       <span className="font-bold text-gray-900">{invoiceNo}</span>
+                    </div>
+                    <div className="flex gap-8 justify-between">
+                       <span className="text-gray-500 font-medium text-sm">Date:</span>
+                       <span className="font-bold text-gray-900">{date}</span>
+                    </div>
+                    <div className="flex gap-8 justify-between">
+                       <span className="text-gray-500 font-medium text-sm">Due Date:</span>
+                       <span className="font-bold text-gray-900">{date}</span>
+                    </div>
+                    <div className="flex gap-8 justify-between">
+                       <span className="text-gray-500 font-medium text-sm">Status:</span>
+                       <span className={`font-bold ${paymentStatus === 'Paid' ? 'text-emerald-600' : 'text-orange-500'}`}>{paymentStatus}</span>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Items Table */}
+              <table className="w-full mb-8">
+                 <thead>
+                    <tr className="bg-gray-100 text-gray-700 text-xs uppercase tracking-wider">
+                       <th className="py-3 px-4 text-left rounded-l-md">#</th>
+                       <th className="py-3 px-4 text-left">Item Description</th>
+                       <th className="py-3 px-4 text-right">Qty</th>
+                       <th className="py-3 px-4 text-right">Rate</th>
+                       <th className="py-3 px-4 text-right rounded-r-md">Amount</th>
+                    </tr>
+                 </thead>
+                 <tbody className="text-sm text-gray-700">
+                    {items.map((item, idx) => (
+                       <tr key={idx} className="border-b border-gray-100">
+                          <td className="py-3 px-4">{idx + 1}</td>
+                          <td className="py-3 px-4 font-medium">{item.productName}</td>
+                          <td className="py-3 px-4 text-right">{item.quantity}</td>
+                          <td className="py-3 px-4 text-right">{item.price.toFixed(2)}</td>
+                          <td className="py-3 px-4 text-right font-bold">₹ {item.total.toFixed(2)}</td>
+                       </tr>
+                    ))}
+                 </tbody>
+              </table>
+
+              {/* Totals */}
+              <div className="flex justify-end mb-12">
+                 <div className="w-1/2 space-y-3">
+                    <div className="flex justify-between text-sm text-gray-600 border-b border-gray-100 pb-2">
+                       <span>Sub Total</span>
+                       <span>₹ {subtotal.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-gray-600 border-b border-gray-100 pb-2">
+                       <span>CGST (9%)</span>
+                       <span>₹ {(tax/2).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-sm text-gray-600 border-b border-gray-100 pb-2">
+                       <span>SGST (9%)</span>
+                       <span>₹ {(tax/2).toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xl font-bold text-gray-900 pt-2">
+                       <span>Grand Total</span>
+                       <span>₹ {total.toFixed(2)}</span>
+                    </div>
+                 </div>
+              </div>
+
+              {/* Terms & Signature */}
+              <div className="grid grid-cols-2 gap-8 mt-auto">
+                 <div>
+                    <h4 className="font-bold text-xs uppercase text-gray-500 mb-2">Terms & Conditions</h4>
+                    <ul className="text-xs text-gray-600 list-disc pl-4 space-y-1">
+                       <li>Goods once sold will not be taken back.</li>
+                       <li>Interest @18% p.a. will be charged if bill is not paid within due date.</li>
+                       <li>Subject to Chennai Jurisdiction only.</li>
+                    </ul>
+                 </div>
+                 <div className="text-right flex flex-col items-end justify-end">
+                    <div className="h-16"></div>
+                    <div className="border-t border-gray-400 w-48 pt-2 text-center text-xs font-bold text-gray-700">
+                       Authorized Signatory
+                    </div>
+                 </div>
+              </div>
+              
+              <div className="text-center text-xs text-gray-400 mt-12 pt-6 border-t border-gray-100">
+                 Generated via BillFlow AI
+              </div>
+           </div>
+        </div>
+      )}
+    </div>
+  );
+};
