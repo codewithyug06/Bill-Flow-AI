@@ -2,7 +2,9 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
 // Initialize Gemini AI Client
 // NOTE: In a real app, ensure API_KEY is defined in your environment variables.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// We use a safe check for process to avoid ReferenceError in browser-only environments.
+const apiKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY) || '';
+const ai = new GoogleGenAI({ apiKey });
 
 const MODEL_FAST = 'gemini-2.5-flash';
 const MODEL_REASONING = 'gemini-3-pro-preview';

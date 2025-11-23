@@ -1,27 +1,45 @@
 
 import React, { useState, useEffect } from 'react';
 import { InvoiceItem, Party, Product, User, Invoice } from '../types';
-import { Plus, Trash2, FileText, Printer, Send, ChevronLeft, CheckCircle2, Download } from 'lucide-react';
+import { Plus, Trash2, FileText, Printer, Send, ChevronLeft, CheckCircle2, Download, Search, Calendar, Eye, ArrowUpRight, ArrowDownLeft, Wallet, Filter, ChevronDown } from 'lucide-react';
 
 interface InvoiceBuilderProps {
   parties?: Party[];
   products: Product[];
+  existingInvoices?: Invoice[];
   onSaveInvoice: (invoice: Invoice) => void;
   user?: User | null;
 }
 
-export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], products = [], onSaveInvoice, user }) => {
+export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], products = [], existingInvoices = [], onSaveInvoice, user }) => {
+  const [view, setView] = useState<'list' | 'edit' | 'preview'>('list');
   const [customer, setCustomer] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
-  const [invoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
+  const [invoiceNo, setInvoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
   const [items, setItems] = useState<InvoiceItem[]>([]);
-  const [view, setView] = useState<'edit' | 'preview'>('edit');
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [autoPrint, setAutoPrint] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Pending'>('Paid');
+  const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+
+  // List View State
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'All' | 'Paid' | 'Pending'>('All');
 
   // Find Selected Party Details
   const selectedParty = parties.find(p => p.name === customer);
+
+  // Summary Calculations
+  const totalSales = existingInvoices.reduce((sum, inv) => sum + inv.total, 0);
+  const totalPaid = existingInvoices.filter(inv => inv.status === 'Paid').reduce((sum, inv) => sum + inv.total, 0);
+  const totalUnpaid = existingInvoices.filter(inv => inv.status === 'Pending' || inv.status === 'Overdue').reduce((sum, inv) => sum + inv.total, 0);
+  
+  const filteredInvoices = existingInvoices.filter(inv => {
+    const matchesSearch = inv.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          inv.invoiceNo.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = statusFilter === 'All' || inv.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   const addItem = () => {
     setItems([...items, {
@@ -64,6 +82,16 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
   const tax = subtotal * 0.18; // 18% GST assumption
   const total = subtotal + tax;
 
+  const handleStartCreate = () => {
+    // Reset form
+    setCustomer('');
+    setDate(new Date().toISOString().split('T')[0]);
+    setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
+    setItems([]);
+    setPaymentStatus('Paid');
+    setView('edit');
+  };
+
   const handleSaveAndGenerate = (shouldPrint = false) => {
     if (!customer) {
       alert("Please enter a customer name");
@@ -87,6 +115,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
     };
 
     onSaveInvoice(newInvoice);
+    setSelectedInvoice(newInvoice);
 
     setShowSaveSuccess(true);
     if (shouldPrint) {
@@ -102,6 +131,17 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
   const handlePrint = () => {
     window.print();
   };
+  
+  const handleViewInvoice = (invoice: Invoice) => {
+    setSelectedInvoice(invoice);
+    // Reconstruct state for preview (optional if reusing preview component differently)
+    setCustomer(invoice.customerName);
+    setInvoiceNo(invoice.invoiceNo);
+    setDate(invoice.date);
+    setItems(invoice.items);
+    setPaymentStatus(invoice.status as 'Paid' | 'Pending');
+    setView('preview');
+  };
 
   useEffect(() => {
     if (view === 'preview' && autoPrint) {
@@ -113,6 +153,144 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
     }
   }, [view, autoPrint]);
 
+  // --- LIST VIEW ---
+  if (view === 'list') {
+    return (
+      <div className="space-y-6">
+        <header className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-gray-800">Sales Invoices</h1>
+          <div className="flex gap-2">
+              <button className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-medium shadow-sm">
+                  <FileText className="w-4 h-4" /> Reports
+              </button>
+          </div>
+        </header>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-teal-50 rounded-xl p-5 border border-teal-100 flex flex-col justify-between h-28 relative overflow-hidden group">
+              <div className="flex items-center gap-2 text-teal-700 text-sm font-medium z-10">
+                  <ArrowUpRight className="w-4 h-4" /> Total Sales
+              </div>
+              <div className="text-2xl font-bold text-gray-800 z-10">₹ {totalSales.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+              <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-teal-100 rounded-full opacity-50 group-hover:scale-110 transition-transform"></div>
+          </div>
+
+          <div className="bg-emerald-50 rounded-xl p-5 border border-emerald-100 flex flex-col justify-between h-28 relative overflow-hidden group">
+              <div className="flex items-center gap-2 text-emerald-700 text-sm font-medium z-10">
+                  <Wallet className="w-4 h-4" /> Paid Sales
+              </div>
+              <div className="text-2xl font-bold text-gray-800 z-10">₹ {totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+              <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-emerald-100 rounded-full opacity-50 group-hover:scale-110 transition-transform"></div>
+          </div>
+
+          <div className="bg-orange-50 rounded-xl p-5 border border-orange-100 flex flex-col justify-between h-28 relative overflow-hidden group">
+              <div className="flex items-center gap-2 text-orange-600 text-sm font-medium z-10">
+                  <ArrowDownLeft className="w-4 h-4" /> Unpaid / Pending
+              </div>
+              <div className="text-2xl font-bold text-gray-800 z-10">₹ {totalUnpaid.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+              <div className="absolute -bottom-4 -right-4 w-24 h-24 bg-orange-100 rounded-full opacity-50 group-hover:scale-110 transition-transform"></div>
+          </div>
+        </div>
+
+        {/* Filters & Actions */}
+        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+               <div className="relative flex-1 min-w-[200px] md:w-80">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input 
+                    type="text" 
+                    placeholder="Search by Customer or Invoice No..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-teal-500 text-sm"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                  />
+               </div>
+               
+               {/* Status Filter */}
+               <div className="relative">
+                 <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                 <select 
+                    value={statusFilter} 
+                    onChange={e => setStatusFilter(e.target.value as any)}
+                    className="pl-9 pr-8 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none appearance-none cursor-pointer hover:bg-gray-50 transition-colors"
+                 >
+                   <option value="All">All Status</option>
+                   <option value="Paid">Paid</option>
+                   <option value="Pending">Pending</option>
+                 </select>
+                 <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" />
+               </div>
+
+               <button className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-gray-600 bg-white hover:bg-gray-50 text-sm">
+                   <Calendar className="w-4 h-4" /> All Time
+               </button>
+           </div>
+           <button 
+             onClick={handleStartCreate}
+             className="bg-teal-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-teal-700 transition-colors shadow-sm flex items-center gap-2"
+           >
+               <Plus className="w-4 h-4" /> Create Sales Invoice
+           </button>
+        </div>
+
+        {/* List Table */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+           <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                 <thead className="bg-gray-50 text-gray-500 font-semibold border-b border-gray-200">
+                    <tr>
+                       <th className="px-6 py-4 w-32">Date</th>
+                       <th className="px-6 py-4">Invoice No</th>
+                       <th className="px-6 py-4">Customer Name</th>
+                       <th className="px-6 py-4 text-right">Amount</th>
+                       <th className="px-6 py-4 text-center">Status</th>
+                       <th className="px-4 py-4 w-10"></th>
+                    </tr>
+                 </thead>
+                 <tbody className="divide-y divide-gray-100">
+                    {filteredInvoices.map((inv, index) => (
+                        <tr key={inv.id} className={`group hover:bg-gray-50 transition-colors ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50/30'}`}>
+                           <td className="px-6 py-4 text-gray-600">{inv.date}</td>
+                           <td className="px-6 py-4 text-gray-500">{inv.invoiceNo}</td>
+                           <td className="px-6 py-4 font-medium text-gray-800">{inv.customerName}</td>
+                           <td className="px-6 py-4 text-right font-medium">₹ {inv.total.toLocaleString()}</td>
+                           <td className="px-6 py-4 text-center">
+                              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                                  inv.status === 'Paid' 
+                                  ? 'bg-emerald-100 text-emerald-700' 
+                                  : 'bg-orange-100 text-orange-600'
+                              }`}>
+                                  {inv.status}
+                              </span>
+                           </td>
+                           <td className="px-4 py-4 text-center">
+                               <button 
+                                  onClick={() => handleViewInvoice(inv)}
+                                  className="text-teal-600 hover:text-teal-800 p-1 rounded-full hover:bg-teal-50 transition-colors tooltip"
+                                  title="View & Print Bill"
+                               >
+                                   <Eye className="w-4 h-4" />
+                               </button>
+                           </td>
+                        </tr>
+                    ))}
+                    {filteredInvoices.length === 0 && (
+                        <tr>
+                            <td colSpan={6} className="text-center py-12 text-gray-400">
+                                No sales invoices found matching filters.
+                            </td>
+                        </tr>
+                    )}
+                 </tbody>
+              </table>
+           </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- CREATE / EDIT / PREVIEW VIEW ---
   return (
     <div className="space-y-6">
       {/* Toast Notification - Hidden in Print */}
@@ -126,13 +304,13 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
       {/* Header */}
       <div className="flex justify-between items-center print:hidden">
         <div className="flex items-center gap-3">
-           {view === 'preview' && (
-             <button onClick={() => setView('edit')} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
-               <ChevronLeft className="w-5 h-5 text-gray-600" />
-             </button>
-           )}
+           <button onClick={() => setView('list')} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+             <ChevronLeft className="w-5 h-5 text-gray-600" />
+           </button>
            <h1 className="text-2xl font-bold text-gray-800">{view === 'edit' ? 'Create Sales Invoice' : 'Invoice Preview'}</h1>
-           <span className="px-3 py-1 bg-teal-50 text-teal-700 text-xs font-bold rounded-full border border-teal-100">INV #{invoiceNo}</span>
+           {view === 'preview' && (
+             <span className="px-3 py-1 bg-teal-50 text-teal-700 text-xs font-bold rounded-full border border-teal-100">INV #{invoiceNo}</span>
+           )}
         </div>
         <div className="flex gap-2">
            {view === 'edit' ? (
@@ -173,7 +351,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                    <input 
                      list="customer-list"
                      type="text" 
-                     className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 outline-none transition-all"
+                     className="w-full border border-teal-200 bg-teal-50/50 rounded-lg px-3 py-2 focus:ring-2 focus:ring-teal-500 focus:bg-white focus:border-transparent outline-none transition-all placeholder-teal-400 text-teal-900 font-medium"
                      placeholder="Search or add customer"
                      value={customer}
                      onChange={(e) => setCustomer(e.target.value)}

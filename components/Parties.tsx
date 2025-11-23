@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { Party, Transaction } from '../types';
-import { Search, Plus, Phone, ArrowDownLeft, ArrowUpRight, History, X, ChevronRight, ShoppingBag, ShoppingCart, Package, MapPin, CreditCard, User as UserIcon } from 'lucide-react';
+import { Search, Plus, Phone, ArrowDownLeft, ArrowUpRight, History, X, ChevronRight, ShoppingBag, ShoppingCart, Filter, ChevronDown, CreditCard, MapPin, User as UserIcon } from 'lucide-react';
 
 interface PartiesProps {
   parties: Party[];
@@ -11,6 +11,7 @@ interface PartiesProps {
 
 export const Parties: React.FC<PartiesProps> = ({ parties, setParties, transactions }) => {
   const [filter, setFilter] = useState<'All' | 'Customer' | 'Supplier'>('All');
+  const [balanceFilter, setBalanceFilter] = useState<'All' | 'Receivable' | 'Payable' | 'Settled'>('All');
   const [searchQuery, setSearchQuery] = useState('');
   
   // Trade Ask State
@@ -28,11 +29,17 @@ export const Parties: React.FC<PartiesProps> = ({ parties, setParties, transacti
     type: 'Customer' as 'Customer' | 'Supplier'
   });
 
-  // Filter based on Type Tab AND Search Query for Main List
+  // Filter based on Type, Balance AND Search Query
   const filteredParties = parties.filter(p => {
     const matchesType = filter === 'All' || p.type === filter;
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.phone.includes(searchQuery);
-    return matchesType && matchesSearch;
+    
+    let matchesBalance = true;
+    if (balanceFilter === 'Receivable') matchesBalance = p.balance > 0;
+    if (balanceFilter === 'Payable') matchesBalance = p.balance < 0;
+    if (balanceFilter === 'Settled') matchesBalance = p.balance === 0;
+
+    return matchesType && matchesSearch && matchesBalance;
   });
 
   // Filter for Trade Ask Modal
@@ -103,7 +110,7 @@ export const Parties: React.FC<PartiesProps> = ({ parties, setParties, transacti
          <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 flex justify-between items-center transition-all duration-300">
             <div>
                <p className="text-emerald-700 text-sm font-medium mb-1">
-                 {searchQuery ? 'Filtered Receivables' : 'Total Receivables'}
+                 {balanceFilter !== 'All' || searchQuery ? 'Filtered Receivables' : 'Total Receivables'}
                </p>
                <p className="text-2xl font-bold text-gray-800">₹ {totalReceivables.toLocaleString()}</p>
             </div>
@@ -114,7 +121,7 @@ export const Parties: React.FC<PartiesProps> = ({ parties, setParties, transacti
          <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex justify-between items-center transition-all duration-300">
             <div>
                <p className="text-red-700 text-sm font-medium mb-1">
-                 {searchQuery ? 'Filtered Payables' : 'Total Payables'}
+                 {balanceFilter !== 'All' || searchQuery ? 'Filtered Payables' : 'Total Payables'}
                </p>
                <p className="text-2xl font-bold text-gray-800">₹ {totalPayables.toLocaleString()}</p>
             </div>
@@ -126,8 +133,8 @@ export const Parties: React.FC<PartiesProps> = ({ parties, setParties, transacti
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         {/* Filters & Search */}
-        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between">
-          <div className="relative flex-1 max-w-md">
+        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row gap-4 justify-between items-center">
+          <div className="relative flex-1 w-full md:max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input 
               type="text" 
@@ -137,20 +144,39 @@ export const Parties: React.FC<PartiesProps> = ({ parties, setParties, transacti
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
-          <div className="flex gap-2">
-            {(['All', 'Customer', 'Supplier'] as const).map((type) => (
-              <button
-                key={type}
-                onClick={() => setFilter(type)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  filter === type 
-                    ? 'bg-teal-100 text-teal-700' 
-                    : 'bg-white border border-gray-200 text-gray-600 hover:bg-gray-50'
-                }`}
-              >
-                {type}
-              </button>
-            ))}
+          <div className="flex flex-wrap gap-3 w-full md:w-auto items-center">
+             {/* Type Filter */}
+             <div className="flex bg-gray-100 p-1 rounded-lg">
+                {(['All', 'Customer', 'Supplier'] as const).map((type) => (
+                  <button
+                    key={type}
+                    onClick={() => setFilter(type)}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                      filter === type 
+                        ? 'bg-white text-teal-700 shadow-sm' 
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {type}
+                  </button>
+                ))}
+             </div>
+
+             {/* Balance Filter */}
+             <div className="relative">
+                <Filter className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                <select 
+                  value={balanceFilter}
+                  onChange={(e) => setBalanceFilter(e.target.value as any)}
+                  className="pl-9 pr-8 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:ring-2 focus:ring-teal-500 outline-none appearance-none cursor-pointer hover:bg-gray-50"
+                >
+                   <option value="All">All Balances</option>
+                   <option value="Receivable">To Collect (+)</option>
+                   <option value="Payable">To Pay (-)</option>
+                   <option value="Settled">Settled (0)</option>
+                </select>
+                <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-500 pointer-events-none" />
+             </div>
           </div>
         </div>
 
@@ -193,7 +219,7 @@ export const Parties: React.FC<PartiesProps> = ({ parties, setParties, transacti
               ) : (
                 <tr>
                   <td colSpan={4} className="px-6 py-12 text-center text-gray-400">
-                    No parties found matching "{searchQuery}"
+                    No parties found matching current filters.
                   </td>
                 </tr>
               )}

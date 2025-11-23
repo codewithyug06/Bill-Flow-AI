@@ -4,7 +4,7 @@ import { ViewState } from '../types';
 import { 
   LayoutDashboard, Users, Package, ShoppingBag, ShoppingCart, 
   BarChart3, Wallet, Settings, ChevronDown, Plus, 
-  Sparkles, FileDigit, X
+  Sparkles, FileText, X
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -38,7 +38,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, o
     <>
       {/* Sidebar Drawer */}
       <aside className={`
-        fixed top-0 left-0 h-full w-72 bg-[#0f172a] shadow-2xl z-50 transform transition-transform duration-300 ease-in-out border-r border-slate-800 flex flex-col print:hidden
+        fixed top-0 left-0 h-full w-72 bg-[#0f172a] shadow-2xl z-[60] transform transition-transform duration-300 ease-in-out border-r border-slate-800 flex flex-col print:hidden
         ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         {/* Header */}
@@ -91,14 +91,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, o
 
         {/* Dummy Invoice Generator */}
         <div className="border-t border-slate-800">
-          <NavItem id="dummy-invoice" label="Dummy Invoice" icon={FileDigit} />
+          <NavItem id="dummy-invoice" label="Dummy Invoice" icon={FileText} />
         </div>
 
         {/* Bottom Settings */}
         <div className="bg-[#0b1120] border-t border-slate-800">
           <button 
             onClick={() => setCurrentView('settings')}
-            className="w-full flex items-center gap-3 px-5 py-4 text-sm text-slate-400 hover:text-white transition-colors"
+            className={`w-full flex items-center gap-3 px-5 py-4 text-sm transition-colors border-l-4 ${
+              currentView === 'settings' 
+                ? 'bg-slate-800 text-teal-400 border-teal-400' 
+                : 'text-slate-400 hover:text-white border-transparent'
+            }`}
           >
             <Settings className="w-4 h-4" />
             <span>Settings</span>

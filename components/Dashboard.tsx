@@ -1,33 +1,29 @@
 
 import React, { useEffect, useState } from 'react';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { ArrowUpRight, ArrowDownLeft, RefreshCw, Sparkles, ChevronRight } from 'lucide-react';
 import { GeminiService } from '../services/geminiService';
-import { Transaction, Party } from '../types';
+import { Transaction, Party, Invoice, Purchase, ViewState } from '../types';
 
 interface DashboardProps {
   transactions: Transaction[];
   parties: Party[];
-  cashBalance?: number;
+  invoices: Invoice[];
+  purchases: Purchase[];
+  onNavigate: (view: ViewState) => void;
 }
 
-const chartData = [
-  { name: '17 Nov', sales: 0 },
-  { name: '18 Nov', sales: 3894 },
-  { name: '19 Nov', sales: 1200 },
-  { name: '20 Nov', sales: 3894 },
-  { name: '21 Nov', sales: 2500 },
-  { name: '22 Nov', sales: 3894 },
-  { name: '23 Nov', sales: 1000 },
-];
-
-export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, cashBalance = 0 }) => {
+export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, invoices, purchases, onNavigate }) => {
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Calculated Stats
-  const toCollect = parties.reduce((sum, p) => p.balance > 0 ? sum + p.balance : sum, 0);
-  const toPay = parties.reduce((sum, p) => p.balance < 0 ? sum + Math.abs(p.balance) : sum, 0);
+  // Calculated Stats based on actual Invoices and Purchases status
+  const toCollect = invoices
+    .filter(inv => inv.status === 'Pending' || inv.status === 'Overdue')
+    .reduce((sum, inv) => sum + inv.total, 0);
+
+  const toPay = purchases
+    .filter(pur => pur.status === 'Unpaid')
+    .reduce((sum, pur) => sum + (pur.unpaidAmount || pur.amount), 0);
   
   // Recent 5 transactions
   const recentTxns = transactions.slice(0, 5);
@@ -35,9 +31,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, cas
   const generateInsights = async () => {
     setLoading(true);
     const context = `
-      To Collect: ${toCollect}
-      To Pay: ${toPay}
-      Cash Balance: ${cashBalance}
+      To Collect (Pending Sales): ${toCollect}
+      To Pay (Unpaid Purchases): ${toPay}
       Recent Transaction Count: ${transactions.length}
       Latest Txn: ${transactions[0]?.type} of ${transactions[0]?.amount}
     `;
@@ -79,41 +74,37 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, cas
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Business Overview Cards */}
-        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* To Collect */}
-          <div className="bg-green-50 p-5 rounded-xl border border-green-100 shadow-sm relative group hover:shadow-md transition-all">
-            <div className="flex justify-between items-start mb-2">
+          <div 
+            onClick={() => onNavigate('sales')}
+            className="bg-green-50 p-6 rounded-xl border border-green-100 shadow-sm relative group hover:shadow-md transition-all cursor-pointer"
+          >
+            <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-2 text-green-700 text-sm font-medium">
-                <ArrowDownLeft className="w-4 h-4" /> To Collect
+                <ArrowDownLeft className="w-5 h-5" /> To Collect (Receivables)
               </div>
-              <ChevronRight className="w-4 h-4 text-green-400 group-hover:translate-x-1 transition-transform" />
+              <ChevronRight className="w-5 h-5 text-green-400 group-hover:translate-x-1 transition-transform" />
             </div>
-            <div className="text-2xl font-bold text-gray-800">₹ {toCollect.toLocaleString()}</div>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-green-200 rounded-b-xl"></div>
+            <div className="text-3xl font-bold text-gray-800 tracking-tight">₹ {toCollect.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            <p className="text-xs text-green-600 mt-2 font-medium">From Pending Sales Invoices</p>
+            <div className="absolute bottom-0 left-0 w-full h-1.5 bg-green-200 rounded-b-xl"></div>
           </div>
 
           {/* To Pay */}
-          <div className="bg-red-50 p-5 rounded-xl border border-red-100 shadow-sm relative group hover:shadow-md transition-all">
-            <div className="flex justify-between items-start mb-2">
+          <div 
+            onClick={() => onNavigate('purchases')}
+            className="bg-red-50 p-6 rounded-xl border border-red-100 shadow-sm relative group hover:shadow-md transition-all cursor-pointer"
+          >
+            <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-2 text-red-700 text-sm font-medium">
-                <ArrowUpRight className="w-4 h-4" /> To Pay
+                <ArrowUpRight className="w-5 h-5" /> To Pay (Payables)
               </div>
-              <ChevronRight className="w-4 h-4 text-red-400 group-hover:translate-x-1 transition-transform" />
+              <ChevronRight className="w-5 h-5 text-red-400 group-hover:translate-x-1 transition-transform" />
             </div>
-            <div className="text-2xl font-bold text-gray-800">₹ {toPay.toLocaleString()}</div>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-red-200 rounded-b-xl"></div>
-          </div>
-
-          {/* Cash Balance */}
-          <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm relative group hover:shadow-md transition-all">
-            <div className="flex justify-between items-start mb-2">
-              <div className="flex items-center gap-2 text-gray-600 text-sm font-medium">
-                <WalletIcon /> Cash + Bank Balance
-              </div>
-              <ChevronRight className="w-4 h-4 text-gray-400 group-hover:translate-x-1 transition-transform" />
-            </div>
-            <div className="text-2xl font-bold text-gray-800">₹ {cashBalance.toLocaleString()}</div>
-            <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-200 rounded-b-xl"></div>
+            <div className="text-3xl font-bold text-gray-800 tracking-tight">₹ {toPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+            <p className="text-xs text-red-600 mt-2 font-medium">From Unpaid Purchase Bills</p>
+            <div className="absolute bottom-0 left-0 w-full h-1.5 bg-red-200 rounded-b-xl"></div>
           </div>
         </div>
 
@@ -161,7 +152,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, cas
           </div>
         </div>
 
-        {/* Right Column: Checklist & Graph */}
+        {/* Right Column: Checklist */}
         <div className="space-y-6">
            {/* Checklist */}
            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center py-12">
@@ -171,42 +162,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, cas
               <h3 className="text-gray-800 font-semibold">Coming Soon...</h3>
               <p className="text-xs text-gray-500 mt-2 px-4">Smarter daily checklist for overdue and follow-ups powered by Gemini.</p>
            </div>
-
-           {/* Sales Report */}
-           <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-              <div className="flex justify-between items-center mb-4">
-                 <h3 className="font-semibold text-gray-800">Sales Report</h3>
-                 <select className="text-xs border rounded px-2 py-1 text-gray-600 bg-gray-50 outline-none">
-                    <option>Daily</option>
-                    <option>Weekly</option>
-                 </select>
-              </div>
-              <div className="h-[200px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4ade80" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#4ade80" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f0f0f0" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
-                    <YAxis axisLine={false} tickLine={false} tick={{fontSize: 10, fill: '#9ca3af'}} />
-                    <Tooltip contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)'}} />
-                    <Area type="monotone" dataKey="sales" stroke="#22c55e" fillOpacity={1} fill="url(#colorSales)" strokeWidth={2} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-           </div>
         </div>
       </div>
     </div>
   );
 };
-
-const WalletIcon = () => (
-  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 text-blue-600">
-    <path fillRule="evenodd" d="M7.5 6v.75H5.513c-.96 0-1.764.724-1.865 1.679l-1.263 12A1.875 1.875 0 004.25 22.5h15.5a1.875 1.875 0 001.865-2.071l-1.263-12a1.875 1.875 0 00-1.865-1.679H16.5V6a4.5 4.5 0 10-9 0zM12 3a3 3 0 00-3 3v.75h6V6a3 3 0 00-3-3zm-3 8.25a3 3 0 106 0v-.75a.75.75 0 011.5 0v.75a4.5 4.5 0 11-9 0v-.75a.75.75 0 011.5 0v.75z" clipRule="evenodd" />
-  </svg>
-);

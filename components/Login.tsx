@@ -1,15 +1,18 @@
+
 import React, { useState } from 'react';
 import { User } from '../types';
-import { ArrowRight, Lock, Phone, ShieldCheck } from 'lucide-react';
+import { ArrowRight, Lock, Phone, ShieldCheck, Building, User as UserIcon } from 'lucide-react';
 
 interface LoginProps {
   onLogin: (user: User) => void;
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const [step, setStep] = useState<'phone' | 'otp'>('phone');
+  const [step, setStep] = useState<'phone' | 'otp' | 'profile'>('phone');
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
+  const [businessName, setBusinessName] = useState('');
+  const [ownerName, setOwnerName] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSendOtp = (e: React.FormEvent) => {
@@ -29,14 +32,24 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       setLoading(true);
       setTimeout(() => {
         setLoading(false);
-        // Simulate backend user fetch
-        onLogin({
-          id: 'u1',
-          name: 'Sree Balaji Plastics',
-          phone: phone,
-          businessName: 'Sree Balaji Plastics Pvt Ltd'
-        });
+        setStep('profile'); // Move to profile setup instead of direct login
       }, 1000);
+    }
+  };
+
+  const handleCompleteSetup = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (businessName && ownerName) {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        onLogin({
+          id: 'u-' + Date.now(),
+          name: ownerName,
+          phone: phone,
+          businessName: businessName
+        });
+      }, 800);
     }
   };
 
@@ -74,13 +87,13 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
           <div className="max-w-md mx-auto w-full">
             <h3 className="text-2xl font-bold text-gray-900 mb-2">
-              {step === 'phone' ? 'Welcome Back' : 'Enter Verification Code'}
+              {step === 'phone' ? 'Welcome Back' : step === 'otp' ? 'Enter Verification Code' : 'Setup Profile'}
             </h3>
             <p className="text-gray-500 mb-8">
-              {step === 'phone' ? 'Enter your mobile number to continue' : `We sent a 4-digit code to +91 ${phone}`}
+              {step === 'phone' ? 'Enter your mobile number to continue' : step === 'otp' ? `We sent a 4-digit code to +91 ${phone}` : 'Tell us about your business'}
             </p>
 
-            {step === 'phone' ? (
+            {step === 'phone' && (
               <form onSubmit={handleSendOtp} className="space-y-5">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">Mobile Number</label>
@@ -105,7 +118,9 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   {loading ? 'Sending...' : 'Get OTP'} <ArrowRight className="w-4 h-4" />
                 </button>
               </form>
-            ) : (
+            )}
+
+            {step === 'otp' && (
               <form onSubmit={handleVerifyOtp} className="space-y-5">
                  <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">OTP Code (Use 1234)</label>
@@ -126,7 +141,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   disabled={loading || otp.length < 4}
                   className="w-full bg-teal-600 text-white py-3 rounded-lg font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
                 >
-                  {loading ? 'Verifying...' : 'Verify & Login'} <ShieldCheck className="w-4 h-4" />
+                  {loading ? 'Verifying...' : 'Verify OTP'} <ShieldCheck className="w-4 h-4" />
                 </button>
                 <button 
                   type="button" 
@@ -134,6 +149,48 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   className="w-full text-sm text-gray-500 hover:text-gray-700 font-medium"
                 >
                   Change Mobile Number
+                </button>
+              </form>
+            )}
+
+            {step === 'profile' && (
+              <form onSubmit={handleCompleteSetup} className="space-y-5 animate-in slide-in-from-right">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Business / Company Name</label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
+                      placeholder="e.g. Acme Traders Pvt Ltd"
+                      value={businessName}
+                      onChange={e => setBusinessName(e.target.value)}
+                      required
+                    />
+                    <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">Your Name (Owner)</label>
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
+                      placeholder="e.g. John Doe"
+                      value={ownerName}
+                      onChange={e => setOwnerName(e.target.value)}
+                      required
+                    />
+                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  </div>
+                </div>
+
+                <button 
+                  type="submit" 
+                  disabled={loading || !businessName || !ownerName}
+                  className="w-full bg-teal-600 text-white py-3 rounded-lg font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                >
+                  {loading ? 'Setting up...' : 'Start Billing'} <ArrowRight className="w-4 h-4" />
                 </button>
               </form>
             )}

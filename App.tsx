@@ -14,7 +14,7 @@ import { PurchaseInvoices } from './components/PurchaseInvoices';
 import { Settings } from './components/Settings';
 import { ViewState, User, Product, Party, Invoice, Purchase, Expense, Transaction, Notification } from './types';
 import { PersistenceService } from './services/persistence';
-import { Menu, Bell, X, Check, AlertCircle } from 'lucide-react';
+import { Menu, Bell, X, Check, AlertCircle, LogOut, Settings as SettingsIcon, ChevronDown } from 'lucide-react';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -22,6 +22,7 @@ const App: React.FC = () => {
   const [showAssistant, setShowAssistant] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   
   // --- Centralized State (acting as Backend DB) ---
   const [products, setProducts] = useState<Product[]>([]);
@@ -112,11 +113,39 @@ const App: React.FC = () => {
     // A. Add Purchase
     setPurchases(prev => [purchase, ...prev]);
 
-    // B. Add Stock
-    setProducts(prevProducts => prevProducts.map(p => {
-      const item = purchase.items.find(i => i.productId === p.id);
-      return item ? { ...p, stock: p.stock + item.qty } : p;
-    }));
+    // B. Add Stock (Handle existing and NEW products)
+    setProducts(prevProducts => {
+      const updatedProducts = [...prevProducts];
+
+      purchase.items.forEach(item => {
+        // Check if product exists (by ID or Name match)
+        const existingIndex = item.productId 
+          ? updatedProducts.findIndex(p => p.id === item.productId)
+          : updatedProducts.findIndex(p => p.name.toLowerCase() === item.name.toLowerCase());
+
+        if (existingIndex >= 0) {
+          // Update existing stock
+          const product = updatedProducts[existingIndex];
+          updatedProducts[existingIndex] = {
+            ...product,
+            stock: product.stock + item.qty
+          };
+        } else {
+          // Create new product
+          updatedProducts.push({
+            id: Date.now().toString() + Math.floor(Math.random() * 1000),
+            name: item.name,
+            category: 'General',
+            price: item.rate, // Use purchase rate as initial price
+            stock: item.qty,
+            unit: 'pcs',
+            description: 'Auto-added from Purchase'
+          });
+        }
+      });
+      
+      return updatedProducts;
+    });
 
     // C. Update Party Balance (Payable -> negative balance) - ONLY IF UNPAID
     if (purchase.status === 'Unpaid') {
@@ -161,28 +190,29 @@ const App: React.FC = () => {
     addNotification('Expense Recorded', `Expense of ₹${expense.amount} categorized as ${expense.category}.`, 'alert');
   };
 
-  // Calculate Cash Balance for Dashboard
-  const calculateCashBalance = () => {
-    const initialCash = 50000; // Starting float
-    const totalSalesPaid = transactions
-      .filter(t => t.type === 'Sales Invoice' && t.status === 'Paid')
-      .reduce((sum, t) => sum + t.amount, 0);
-    const totalPurchasesPaid = transactions
-      .filter(t => t.type === 'Purchase' && t.status === 'Paid')
-      .reduce((sum, t) => sum + t.amount, 0);
-    const totalExpenses = expenses.reduce((sum, e) => sum + e.amount, 0);
-
-    return initialCash + totalSalesPaid - totalPurchasesPaid - totalExpenses;
-  };
-
   // Login Handler
   const handleLogin = (u: User) => {
+    // Only set default details if missing (though the Login component now provides them)
     const fullUser = {
       ...u,
-      gstin: u.gstin || '33ABCDE1234F1Z5',
-      address: u.address || '123, Industrial Area, Phase 2\nChennai, Tamil Nadu - 600001'
+      gstin: u.gstin || '',
+      address: u.address || ''
     };
     setUser(fullUser);
+  };
+
+  const handleLogout = () => {
+    // 1. Clear local storage
+    PersistenceService.save(PersistenceService.KEYS.USER, null);
+    // 2. Clear state
+    setUser(null);
+    setCurrentView('dashboard');
+    setShowProfileMenu(false);
+  };
+
+  const handleNavigation = (view: ViewState) => {
+    setCurrentView(view);
+    setIsSidebarOpen(false); // Close sidebar on selection
   };
 
   if (!user) {
@@ -195,12 +225,15 @@ const App: React.FC = () => {
         return <Dashboard 
           transactions={transactions} 
           parties={parties} 
-          cashBalance={calculateCashBalance()} 
+          invoices={invoices}
+          purchases={purchases}
+          onNavigate={handleNavigation}
         />;
       case 'sales':
         return <InvoiceBuilder 
           parties={parties} 
           products={products}
+          existingInvoices={invoices}
           onSaveInvoice={handleCreateSale}
           user={user}
         />;
@@ -209,7 +242,7 @@ const App: React.FC = () => {
       case 'parties':
         return <Parties parties={parties} setParties={setParties} transactions={transactions} />;
       case 'reports':
-        return <Reports />;
+        return <Reports invoices={invoices} purchases={purchases} />;
       case 'expenses':
         return <Expenses expenses={expenses} onAddExpense={handleCreateExpense} />;
       case 'dummy-invoice':
@@ -224,7 +257,13 @@ const App: React.FC = () => {
       case 'settings':
         return <Settings user={user} onUpdateUser={setUser} />;
       default:
-        return <Dashboard transactions={transactions} parties={parties} cashBalance={calculateCashBalance()} />;
+        return <Dashboard 
+          transactions={transactions} 
+          parties={parties} 
+          invoices={invoices}
+          purchases={purchases}
+          onNavigate={handleNavigation}
+        />;
     }
   };
 
@@ -235,10 +274,7 @@ const App: React.FC = () => {
       {/* Sidebar - Controlled by isSidebarOpen */}
       <Sidebar 
         currentView={currentView} 
-        setCurrentView={(view) => {
-           setCurrentView(view);
-           setIsSidebarOpen(false); // Close sidebar on selection
-        }}
+        setCurrentView={handleNavigation}
         onOpenAssistant={() => setShowAssistant(true)}
         isOpen={isSidebarOpen}
         onClose={() => setIsSidebarOpen(false)}
@@ -247,7 +283,7 @@ const App: React.FC = () => {
       {/* Main Layout */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         {/* Global Header */}
-        <header className="bg-teal-900 text-white h-16 flex items-center justify-between px-4 shadow-md z-30 shrink-0 print:hidden relative">
+        <header className="bg-teal-900 text-white h-16 flex items-center justify-between px-4 shadow-md z-50 shrink-0 print:hidden relative">
            <div className="flex items-center gap-4">
               <button 
                 onClick={() => setIsSidebarOpen(true)}
@@ -265,8 +301,11 @@ const App: React.FC = () => {
               {/* Notifications */}
               <div className="relative">
                 <button 
-                  onClick={() => setShowNotifications(!showNotifications)}
-                  className="p-2 hover:bg-teal-800 rounded-full relative transition-colors"
+                  onClick={() => {
+                    setShowNotifications(!showNotifications);
+                    setShowProfileMenu(false);
+                  }}
+                  className="p-2 hover:bg-teal-800 rounded-full relative transition-colors focus:outline-none"
                 >
                    <Bell className="w-5 h-5" />
                    {unreadCount > 0 && (
@@ -276,7 +315,7 @@ const App: React.FC = () => {
 
                 {/* Notification Dropdown */}
                 {showNotifications && (
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 animate-in slide-in-from-top-2">
+                  <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-40 animate-in slide-in-from-top-2 text-gray-800">
                     <div className="p-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
                       <h3 className="font-semibold text-gray-800 text-sm">Notifications</h3>
                       <button onClick={() => setShowNotifications(false)}><X className="w-4 h-4 text-gray-400 hover:text-gray-600"/></button>
@@ -301,14 +340,56 @@ const App: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex items-center gap-2 pl-4 border-l border-teal-800">
-                 <div className="text-right hidden md:block">
-                    <div className="text-sm font-semibold">{user.businessName}</div>
-                    <div className="text-xs text-teal-300">{user.phone}</div>
-                 </div>
-                 <div className="w-9 h-9 bg-teal-700 rounded-full flex items-center justify-center text-sm font-bold border-2 border-teal-600">
-                    {user.name.charAt(0)}
-                 </div>
+              {/* Profile Dropdown */}
+              <div className="relative border-l border-teal-800 pl-4">
+                 <button 
+                   onClick={() => {
+                     setShowProfileMenu(!showProfileMenu);
+                     setShowNotifications(false);
+                   }}
+                   className="flex items-center gap-2 focus:outline-none group"
+                 >
+                    <div className="text-right hidden md:block">
+                       <div className="text-sm font-semibold">{user.businessName}</div>
+                       <div className="text-xs text-teal-300">{user.name}</div>
+                    </div>
+                    <div className="w-9 h-9 bg-teal-700 rounded-full flex items-center justify-center text-sm font-bold border-2 border-teal-600 group-hover:border-teal-400 transition-colors relative">
+                       {user.name.charAt(0).toUpperCase()}
+                       <div className="absolute -bottom-1 -right-1 bg-teal-900 rounded-full p-0.5 border border-teal-600">
+                          <ChevronDown className="w-2 h-2 text-teal-200" />
+                       </div>
+                    </div>
+                 </button>
+
+                 {/* Dropdown Menu */}
+                 {showProfileMenu && (
+                    <div className="absolute right-0 top-full mt-3 w-56 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-40 animate-in slide-in-from-top-2">
+                       <div className="p-4 border-b border-gray-100 bg-gray-50">
+                          <p className="text-sm font-bold text-gray-800">{user.name}</p>
+                          <p className="text-xs text-gray-500 truncate">{user.phone}</p>
+                       </div>
+                       <div className="p-1">
+                          <button 
+                            onClick={() => { 
+                              setCurrentView('settings'); 
+                              setShowProfileMenu(false); 
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg flex items-center gap-2 transition-colors cursor-pointer"
+                          >
+                             <SettingsIcon className="w-4 h-4 text-gray-500" /> Settings
+                          </button>
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleLogout();
+                            }}
+                            className="w-full text-left px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg flex items-center gap-2 transition-colors mt-1 cursor-pointer"
+                          >
+                             <LogOut className="w-4 h-4" /> Logout
+                          </button>
+                       </div>
+                    </div>
+                 )}
               </div>
            </div>
         </header>
@@ -329,16 +410,19 @@ const App: React.FC = () => {
       {/* Overlay for sidebar when open */}
       {isSidebarOpen && (
         <div 
-          className="fixed inset-0 bg-black/60 z-40 transition-opacity duration-300 backdrop-blur-sm print:hidden" 
+          className="fixed inset-0 bg-black/60 z-[55] transition-opacity duration-300 backdrop-blur-sm print:hidden" 
           onClick={() => setIsSidebarOpen(false)}
         />
       )}
       
-      {/* Overlay for notifications */}
-      {showNotifications && (
+      {/* Overlay for notifications/profile dropdown */}
+      {(showNotifications || showProfileMenu) && (
         <div 
-          className="fixed inset-0 z-40 bg-transparent"
-          onClick={() => setShowNotifications(false)}
+          className="fixed inset-0 z-30 bg-transparent"
+          onClick={() => {
+            setShowNotifications(false);
+            setShowProfileMenu(false);
+          }}
         />
       )}
     </div>
