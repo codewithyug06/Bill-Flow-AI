@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { InvoiceItem, Party, Product, User, Invoice } from '../types';
-import { Plus, Trash2, FileText, Printer, Send, ChevronLeft, CheckCircle2, Download, Search, Calendar, Eye, ArrowUpRight, ArrowDownLeft, Wallet, Filter, ChevronDown } from 'lucide-react';
+import { Plus, Trash2, FileText, Printer, Send, ChevronLeft, CheckCircle2, Download, Search, Calendar, Eye, ArrowUpRight, ArrowDownLeft, Wallet, Filter, ChevronDown, Mail, Loader2 } from 'lucide-react';
 
 interface InvoiceBuilderProps {
   parties?: Party[];
@@ -17,10 +17,15 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [invoiceNo, setInvoiceNo] = useState(`INV-${Date.now().toString().slice(-6)}`);
   const [items, setItems] = useState<InvoiceItem[]>([]);
+  const [taxRate, setTaxRate] = useState<number>(18);
   const [showSaveSuccess, setShowSaveSuccess] = useState(false);
   const [autoPrint, setAutoPrint] = useState(false);
   const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Pending'>('Paid');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
+  
+  // Sending State
+  const [isSending, setIsSending] = useState(false);
+  const [sendSuccess, setSendSuccess] = useState(false);
 
   // List View State
   const [searchTerm, setSearchTerm] = useState('');
@@ -79,7 +84,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
   };
 
   const subtotal = items.reduce((sum, item) => sum + item.total, 0);
-  const tax = subtotal * 0.18; // 18% GST assumption
+  const tax = subtotal * (taxRate / 100);
   const total = subtotal + tax;
 
   const handleStartCreate = () => {
@@ -89,20 +94,20 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
     setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
     setItems([]);
     setPaymentStatus('Paid');
+    setTaxRate(18);
     setView('edit');
   };
 
-  const handleSaveAndGenerate = (shouldPrint = false) => {
+  const constructInvoice = (): Invoice | null => {
     if (!customer) {
       alert("Please enter a customer name");
-      return;
+      return null;
     }
     if (items.length === 0) {
       alert("Please add at least one item");
-      return;
+      return null;
     }
-    
-    const newInvoice: Invoice = {
+    return {
       id: Date.now().toString(),
       invoiceNo,
       date,
@@ -110,9 +115,15 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
       items,
       subtotal,
       tax,
+      taxRate,
       total,
       status: paymentStatus
     };
+  };
+
+  const handleSaveAndGenerate = (shouldPrint = false) => {
+    const newInvoice = constructInvoice();
+    if (!newInvoice) return;
 
     onSaveInvoice(newInvoice);
     setSelectedInvoice(newInvoice);
@@ -128,6 +139,33 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
     }, shouldPrint ? 500 : 1000); 
   };
 
+  const handleSaveAndSend = () => {
+    const newInvoice = constructInvoice();
+    if (!newInvoice) return;
+
+    // Determine Email
+    let emailToUse = selectedParty?.email;
+    if (!emailToUse) {
+       const manualEmail = prompt(`No email found for ${customer}. Please enter email address to send invoice:`);
+       if (!manualEmail) return; // User cancelled
+       emailToUse = manualEmail;
+    }
+
+    // 1. Save
+    onSaveInvoice(newInvoice);
+    setSelectedInvoice(newInvoice);
+    
+    // 2. Simulate Sending
+    setIsSending(true);
+    setTimeout(() => {
+       setIsSending(false);
+       setSendSuccess(true);
+       alert(`Invoice ${newInvoice.invoiceNo} successfully sent to ${emailToUse}`);
+       setView('preview');
+       setTimeout(() => setSendSuccess(false), 3000);
+    }, 1500);
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -140,6 +178,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
     setDate(invoice.date);
     setItems(invoice.items);
     setPaymentStatus(invoice.status as 'Paid' | 'Pending');
+    setTaxRate(invoice.taxRate ?? 18);
     setView('preview');
   };
 
@@ -300,6 +339,13 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
           <span className="font-medium">Invoice Saved & Stock Updated!</span>
         </div>
       )}
+      
+      {sendSuccess && (
+        <div className="fixed top-4 right-4 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-center gap-2 animate-in slide-in-from-top-5 print:hidden">
+          <Mail className="w-5 h-5" />
+          <span className="font-medium">Invoice Sent Successfully!</span>
+        </div>
+      )}
 
       {/* Header */}
       <div className="flex justify-between items-center print:hidden">
@@ -450,8 +496,16 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                    <span>Subtotal</span>
                    <span>₹{subtotal.toFixed(2)}</span>
                  </div>
-                 <div className="flex justify-between text-gray-600">
-                   <span>Tax (18% GST)</span>
+                 <div className="flex justify-between items-center text-gray-600">
+                   <div className="flex items-center gap-2">
+                      <span>GST (%)</span>
+                      <input 
+                        type="number" 
+                        value={taxRate}
+                        onChange={(e) => setTaxRate(parseFloat(e.target.value) || 0)}
+                        className="w-12 border border-gray-300 rounded px-1 py-0.5 text-xs focus:ring-1 focus:ring-teal-500 outline-none"
+                      />
+                   </div>
                    <span>₹{tax.toFixed(2)}</span>
                  </div>
                </div>
@@ -478,18 +532,30 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                    </div>
                </div>
 
-               <button 
-                  onClick={() => handleSaveAndGenerate(false)}
-                  className="w-full bg-teal-600 text-white py-3 rounded-lg font-medium hover:bg-teal-700 shadow-lg shadow-teal-200 transition-all flex justify-center items-center gap-2 mb-3"
-               >
-                  <Send className="w-4 h-4" /> Save & Generate
-               </button>
-               <button 
-                  onClick={() => handleSaveAndGenerate(true)}
-                  className="w-full bg-white border border-teal-600 text-teal-700 py-3 rounded-lg font-medium hover:bg-teal-50 transition-all flex justify-center items-center gap-2"
-               >
-                  <Printer className="w-4 h-4" /> Save & Print
-               </button>
+               <div className="space-y-2">
+                 <button 
+                    onClick={() => handleSaveAndGenerate(false)}
+                    className="w-full bg-teal-600 text-white py-3 rounded-lg font-medium hover:bg-teal-700 shadow-lg shadow-teal-200 transition-all flex justify-center items-center gap-2"
+                 >
+                    <Send className="w-4 h-4" /> Save & Generate
+                 </button>
+                 <div className="flex gap-2">
+                   <button 
+                      onClick={() => handleSaveAndGenerate(true)}
+                      className="flex-1 bg-white border border-teal-600 text-teal-700 py-3 rounded-lg font-medium hover:bg-teal-50 transition-all flex justify-center items-center gap-2"
+                   >
+                      <Printer className="w-4 h-4" /> Save & Print
+                   </button>
+                   <button 
+                      onClick={handleSaveAndSend}
+                      disabled={isSending}
+                      className="flex-1 bg-blue-50 border border-blue-200 text-blue-700 py-3 rounded-lg font-medium hover:bg-blue-100 transition-all flex justify-center items-center gap-2"
+                   >
+                      {isSending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />} 
+                      {isSending ? 'Sending' : 'Send'}
+                   </button>
+                 </div>
+               </div>
             </div>
           </div>
         </div>
@@ -582,11 +648,11 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                        <span>₹ {subtotal.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-gray-600 border-b border-gray-100 pb-2">
-                       <span>CGST (9%)</span>
+                       <span>CGST ({(taxRate / 2).toFixed(1)}%)</span>
                        <span>₹ {(tax/2).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm text-gray-600 border-b border-gray-100 pb-2">
-                       <span>SGST (9%)</span>
+                       <span>SGST ({(taxRate / 2).toFixed(1)}%)</span>
                        <span>₹ {(tax/2).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-xl font-bold text-gray-900 pt-2">

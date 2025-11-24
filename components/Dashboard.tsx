@@ -1,8 +1,9 @@
 
-import React, { useEffect, useState } from 'react';
-import { ArrowUpRight, ArrowDownLeft, RefreshCw, Sparkles, ChevronRight } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import { ArrowUpRight, ArrowDownLeft, RefreshCw, Sparkles, ChevronRight, TrendingUp } from 'lucide-react';
 import { GeminiService } from '../services/geminiService';
 import { Transaction, Party, Invoice, Purchase, ViewState } from '../types';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -28,12 +29,36 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, inv
   // Recent 5 transactions
   const recentTxns = transactions.slice(0, 5);
 
+  // Calculate Last 7 Days Sales
+  const salesData = useMemo(() => {
+    const data = [];
+    const today = new Date();
+    // Last 7 days
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      // Format: "Mon", "Tue"
+      const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
+      
+      const total = invoices
+        .filter(inv => inv.date === dateStr)
+        .reduce((sum, inv) => sum + inv.total, 0);
+        
+      data.push({ name: dayName, amount: total });
+    }
+    return data;
+  }, [invoices]);
+
+  const weeklyTotal = salesData.reduce((sum, day) => sum + day.amount, 0);
+
   const generateInsights = async () => {
     setLoading(true);
     const context = `
       To Collect (Pending Sales): ${toCollect}
       To Pay (Unpaid Purchases): ${toPay}
       Recent Transaction Count: ${transactions.length}
+      Weekly Sales: ${weeklyTotal}
       Latest Txn: ${transactions[0]?.type} of ${transactions[0]?.amount}
     `;
     const insight = await GeminiService.analyzeBusinessData(context);
@@ -152,15 +177,47 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, inv
           </div>
         </div>
 
-        {/* Right Column: Checklist */}
+        {/* Right Column: Weekly Sales Graph */}
         <div className="space-y-6">
-           {/* Checklist */}
-           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm text-center py-12">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-orange-100 rounded-full mb-4">
-                <div className="w-8 h-8 border-4 border-orange-400 border-t-transparent rounded-full animate-spin"></div>
+           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-full flex flex-col min-h-[300px]">
+              <div className="flex justify-between items-center mb-6">
+                 <h3 className="font-semibold text-gray-800">Weekly Sales</h3>
+                 <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full flex items-center gap-1">
+                    <TrendingUp className="w-3 h-3" /> Last 7 Days
+                 </span>
               </div>
-              <h3 className="text-gray-800 font-semibold">Coming Soon...</h3>
-              <p className="text-xs text-gray-500 mt-2 px-4">Smarter daily checklist for overdue and follow-ups powered by Gemini.</p>
+              
+              <div className="flex-1 w-full min-h-[200px]">
+                 <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={salesData}>
+                       <XAxis 
+                          dataKey="name" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{fontSize: 11, fill: '#9ca3af'}} 
+                          dy={10}
+                       />
+                       <Tooltip 
+                          cursor={{fill: '#f0fdf4'}}
+                          contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
+                          itemStyle={{color: '#0f766e', fontWeight: 600}}
+                          formatter={(value: number) => [`₹ ${value.toLocaleString()}`, 'Sales']}
+                       />
+                       <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
+                          {salesData.map((entry, index) => (
+                             <Cell key={`cell-${index}`} fill={entry.amount > 0 ? '#0d9488' : '#e2e8f0'} />
+                          ))}
+                       </Bar>
+                    </BarChart>
+                 </ResponsiveContainer>
+              </div>
+              
+              <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center text-sm">
+                 <span className="text-gray-500">Total this week</span>
+                 <span className="font-bold text-gray-800">
+                    ₹ {weeklyTotal.toLocaleString()}
+                 </span>
+              </div>
            </div>
         </div>
       </div>

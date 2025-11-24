@@ -14,9 +14,10 @@ import { PurchaseInvoices } from './components/PurchaseInvoices';
 import { Settings } from './components/Settings';
 import { ViewState, User, Product, Party, Invoice, Purchase, Expense, Transaction, Notification } from './types';
 import { PersistenceService } from './services/persistence';
-import { Menu, Bell, X, Check, AlertCircle, LogOut, Settings as SettingsIcon, ChevronDown } from 'lucide-react';
+import { Menu, Bell, X, Check, AlertCircle, LogOut, Settings as SettingsIcon, ChevronDown, Loader2 } from 'lucide-react';
 
 const App: React.FC = () => {
+  const [isAppLoading, setIsAppLoading] = useState(true); // New loading state
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
   const [showAssistant, setShowAssistant] = useState(false);
@@ -35,26 +36,34 @@ const App: React.FC = () => {
 
   // --- Initialization (Load from LocalStorage) ---
   useEffect(() => {
-    setProducts(PersistenceService.loadProducts());
-    setParties(PersistenceService.loadParties());
-    setInvoices(PersistenceService.loadInvoices());
-    setPurchases(PersistenceService.loadPurchases());
-    setExpenses(PersistenceService.loadExpenses());
-    setTransactions(PersistenceService.loadTransactions());
-    
-    // Load User
-    const storedUser = PersistenceService.load(PersistenceService.KEYS.USER, null);
-    if (storedUser) setUser(storedUser);
+    const loadData = async () => {
+      // Small artificial delay to ensure smooth transition logic (optional, but feels better)
+      setProducts(PersistenceService.loadProducts());
+      setParties(PersistenceService.loadParties());
+      setInvoices(PersistenceService.loadInvoices());
+      setPurchases(PersistenceService.loadPurchases());
+      setExpenses(PersistenceService.loadExpenses());
+      setTransactions(PersistenceService.loadTransactions());
+      
+      // Load User Session
+      const storedUser = PersistenceService.load(PersistenceService.KEYS.USER, null);
+      if (storedUser) {
+        setUser(storedUser);
+      }
+      setIsAppLoading(false);
+    };
+
+    loadData();
   }, []);
 
   // --- Persistence Listeners (Save on Change) ---
-  useEffect(() => PersistenceService.save(PersistenceService.KEYS.PRODUCTS, products), [products]);
-  useEffect(() => PersistenceService.save(PersistenceService.KEYS.PARTIES, parties), [parties]);
-  useEffect(() => PersistenceService.save(PersistenceService.KEYS.INVOICES, invoices), [invoices]);
-  useEffect(() => PersistenceService.save(PersistenceService.KEYS.PURCHASES, purchases), [purchases]);
-  useEffect(() => PersistenceService.save(PersistenceService.KEYS.EXPENSES, expenses), [expenses]);
-  useEffect(() => PersistenceService.save(PersistenceService.KEYS.TRANSACTIONS, transactions), [transactions]);
-  useEffect(() => { if(user) PersistenceService.save(PersistenceService.KEYS.USER, user); }, [user]);
+  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.PRODUCTS, products); }, [products, isAppLoading]);
+  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.PARTIES, parties); }, [parties, isAppLoading]);
+  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.INVOICES, invoices); }, [invoices, isAppLoading]);
+  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.PURCHASES, purchases); }, [purchases, isAppLoading]);
+  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.EXPENSES, expenses); }, [expenses, isAppLoading]);
+  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.TRANSACTIONS, transactions); }, [transactions, isAppLoading]);
+  useEffect(() => { if(user && !isAppLoading) PersistenceService.save(PersistenceService.KEYS.USER, user); }, [user, isAppLoading]);
 
 
   // Helper to add notification
@@ -199,6 +208,8 @@ const App: React.FC = () => {
       address: u.address || ''
     };
     setUser(fullUser);
+    // Force immediate save to persistence to prevent data loss on refresh immediately after login
+    PersistenceService.save(PersistenceService.KEYS.USER, fullUser);
   };
 
   const handleLogout = () => {
@@ -214,6 +225,20 @@ const App: React.FC = () => {
     setCurrentView(view);
     setIsSidebarOpen(false); // Close sidebar on selection
   };
+
+  // Loading Screen
+  if (isAppLoading) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center flex-col gap-4">
+        <div className="w-16 h-16 bg-gradient-to-br from-teal-400 to-emerald-600 rounded-xl flex items-center justify-center animate-pulse">
+           <span className="text-white font-bold text-2xl">BF</span>
+        </div>
+        <p className="text-teal-400 font-medium animate-pulse flex items-center gap-2">
+          <Loader2 className="w-4 h-4 animate-spin" /> Loading your workspace...
+        </p>
+      </div>
+    );
+  }
 
   if (!user) {
     return <Login onLogin={handleLogin} />;
@@ -291,10 +316,13 @@ const App: React.FC = () => {
               >
                 <Menu className="w-6 h-6" />
               </button>
-              <div className="flex items-center gap-2">
+              <button 
+                onClick={() => handleNavigation('dashboard')}
+                className="flex items-center gap-2 hover:opacity-90 transition-opacity focus:outline-none"
+              >
                  <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm">BF</div>
                  <h1 className="font-bold text-lg tracking-tight hidden md:block">BillFlow AI</h1>
-              </div>
+              </button>
            </div>
            
            <div className="flex items-center gap-4">
