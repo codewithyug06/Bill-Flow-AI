@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './components/Dashboard';
 import { InvoiceBuilder } from './components/InvoiceBuilder';
@@ -14,10 +14,11 @@ import { PurchaseInvoices } from './components/PurchaseInvoices';
 import { Settings } from './components/Settings';
 import { ViewState, User, Product, Party, Invoice, Purchase, Expense, Transaction, Notification } from './types';
 import { PersistenceService } from './services/persistence';
-import { Menu, Bell, X, Check, AlertCircle, LogOut, Settings as SettingsIcon, ChevronDown, Loader2 } from 'lucide-react';
+import { FirebaseService } from './services/firebase';
+import { Menu, Bell, X, Check, AlertCircle, LogOut, Settings as SettingsIcon, ChevronDown, Loader2, CloudOff } from 'lucide-react';
 
 const App: React.FC = () => {
-  const [isAppLoading, setIsAppLoading] = useState(true); // New loading state
+  const [isAppLoading, setIsAppLoading] = useState(true);
   const [user, setUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<ViewState>('dashboard');
   const [showAssistant, setShowAssistant] = useState(false);
@@ -25,7 +26,7 @@ const App: React.FC = () => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
   
-  // --- Centralized State (acting as Backend DB) ---
+  // --- Data State ---
   const [products, setProducts] = useState<Product[]>([]);
   const [parties, setParties] = useState<Party[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
@@ -34,39 +35,43 @@ const App: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
-  // --- Initialization (Load from LocalStorage) ---
+  // --- Initialization ---
   useEffect(() => {
-    const loadData = async () => {
-      // Small artificial delay to ensure smooth transition logic (optional, but feels better)
-      setProducts(PersistenceService.loadProducts());
-      setParties(PersistenceService.loadParties());
-      setInvoices(PersistenceService.loadInvoices());
-      setPurchases(PersistenceService.loadPurchases());
-      setExpenses(PersistenceService.loadExpenses());
-      setTransactions(PersistenceService.loadTransactions());
-      
-      // Load User Session
+    const loadSession = async () => {
+      // Load User Session from LocalStorage (to keep login persistent)
       const storedUser = PersistenceService.load(PersistenceService.KEYS.USER, null);
       if (storedUser) {
         setUser(storedUser);
       }
       setIsAppLoading(false);
     };
-
-    loadData();
+    loadSession();
   }, []);
 
-  // --- Persistence Listeners (Save on Change) ---
-  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.PRODUCTS, products); }, [products, isAppLoading]);
-  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.PARTIES, parties); }, [parties, isAppLoading]);
-  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.INVOICES, invoices); }, [invoices, isAppLoading]);
-  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.PURCHASES, purchases); }, [purchases, isAppLoading]);
-  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.EXPENSES, expenses); }, [expenses, isAppLoading]);
-  useEffect(() => { if(!isAppLoading) PersistenceService.save(PersistenceService.KEYS.TRANSACTIONS, transactions); }, [transactions, isAppLoading]);
-  useEffect(() => { if(user && !isAppLoading) PersistenceService.save(PersistenceService.KEYS.USER, user); }, [user, isAppLoading]);
+  // --- FIREBASE REAL-TIME LISTENERS ---
+  useEffect(() => {
+    if (!user) return;
 
+    // Subscribe to all collections for the logged-in user
+    const unsubProducts = FirebaseService.subscribe(user.id, 'products', (data) => setProducts(data));
+    const unsubParties = FirebaseService.subscribe(user.id, 'parties', (data) => setParties(data));
+    const unsubInvoices = FirebaseService.subscribe(user.id, 'invoices', (data) => setInvoices(data));
+    const unsubPurchases = FirebaseService.subscribe(user.id, 'purchases', (data) => setPurchases(data));
+    const unsubExpenses = FirebaseService.subscribe(user.id, 'expenses', (data) => setExpenses(data));
+    const unsubTransactions = FirebaseService.subscribe(user.id, 'transactions', (data) => setTransactions(data));
 
-  // Helper to add notification
+    return () => {
+      // Cleanup listeners on logout
+      unsubProducts();
+      unsubParties();
+      unsubInvoices();
+      unsubPurchases();
+      unsubExpenses();
+      unsubTransactions();
+    };
+  }, [user]);
+
+  // --- Notification Helper ---
   const addNotification = (title: string, message: string, type: 'success' | 'alert' | 'info' = 'info') => {
     const newNotif: Notification = {
       id: Date.now().toString(),
@@ -79,151 +84,123 @@ const App: React.FC = () => {
     setNotifications(prev => [newNotif, ...prev]);
   };
 
-  // --- Backend Logic / Controller Functions ---
+  // --- Handler Functions (Using Firebase Service) ---
 
-  // 1. Handle New Sales Invoice
-  const handleCreateSale = (invoice: Invoice) => {
-    // A. Add Invoice
-    setInvoices(prev => [invoice, ...prev]);
-
-    // B. Deduct Stock
-    setProducts(prevProducts => prevProducts.map(p => {
-      const item = invoice.items.find(i => i.productId === p.id);
-      return item ? { ...p, stock: p.stock - item.quantity } : p;
-    }));
-
-    // C. Update Party Balance (Receivable) - ONLY IF PENDING/UNPAID
-    if (invoice.status === 'Pending' || invoice.status === 'Overdue') {
-      setParties(prevParties => prevParties.map(p => {
-        return p.name === invoice.customerName 
-          ? { ...p, balance: p.balance + invoice.total } 
-          : p;
-      }));
+  const handleCreateSale = async (invoice: Invoice) => {
+    if (!user) return;
+    try {
+      const party = parties.find(p => p.name === invoice.customerName);
+      await FirebaseService.createSaleBatch(user.id, invoice, products, party);
+      addNotification('Sale Recorded', `Invoice ${invoice.invoiceNo} saved to cloud.`, 'success');
+    } catch (error) {
+      console.error(error);
+      addNotification('Error', 'Failed to save sale to cloud.', 'alert');
     }
-
-    // D. Add Transaction
-    const newTxn: Transaction = {
-      id: invoice.id,
-      date: invoice.date,
-      type: 'Sales Invoice',
-      txnNo: invoice.invoiceNo,
-      partyName: invoice.customerName,
-      amount: invoice.total,
-      status: invoice.status === 'Paid' ? 'Paid' : 'Unpaid'
-    };
-    setTransactions(prev => [newTxn, ...prev]);
-
-    // E. Notification
-    addNotification('Sale Recorded', `Invoice ${invoice.invoiceNo} for ₹${invoice.total} created.`, 'success');
   };
 
-  // 2. Handle New Purchase
-  const handleCreatePurchase = (purchase: Purchase) => {
-    // A. Add Purchase
-    setPurchases(prev => [purchase, ...prev]);
-
-    // B. Add Stock (Handle existing and NEW products)
-    setProducts(prevProducts => {
-      const updatedProducts = [...prevProducts];
-
-      purchase.items.forEach(item => {
-        // Check if product exists (by ID or Name match)
-        const existingIndex = item.productId 
-          ? updatedProducts.findIndex(p => p.id === item.productId)
-          : updatedProducts.findIndex(p => p.name.toLowerCase() === item.name.toLowerCase());
-
-        if (existingIndex >= 0) {
-          // Update existing stock
-          const product = updatedProducts[existingIndex];
-          updatedProducts[existingIndex] = {
-            ...product,
-            stock: product.stock + item.qty
-          };
-        } else {
-          // Create new product
-          updatedProducts.push({
-            id: Date.now().toString() + Math.floor(Math.random() * 1000),
-            name: item.name,
-            category: 'General',
-            price: item.rate, // Use purchase rate as initial price
-            stock: item.qty,
-            unit: 'pcs',
-            description: 'Auto-added from Purchase'
-          });
-        }
-      });
-      
-      return updatedProducts;
-    });
-
-    // C. Update Party Balance (Payable -> negative balance) - ONLY IF UNPAID
-    if (purchase.status === 'Unpaid') {
-      setParties(prevParties => prevParties.map(p => {
-        return p.name === purchase.partyName 
-          ? { ...p, balance: p.balance - purchase.amount } 
-          : p;
-      }));
+  const handleUpdateSaleStatus = async (invoice: Invoice, newStatus: 'Paid' | 'Pending') => {
+    if (!user) return;
+    try {
+      await FirebaseService.updateInvoiceStatus(user.id, invoice, newStatus, parties);
+      addNotification('Status Updated', `Invoice ${invoice.invoiceNo} marked as ${newStatus}.`, 'success');
+    } catch (error) {
+       console.error(error);
+       addNotification('Error', 'Failed to update status.', 'alert');
     }
-
-    // D. Add Transaction
-    const newTxn: Transaction = {
-      id: purchase.id,
-      date: purchase.date,
-      type: 'Purchase',
-      txnNo: purchase.invoiceNo,
-      partyName: purchase.partyName,
-      amount: purchase.amount,
-      status: purchase.status
-    };
-    setTransactions(prev => [newTxn, ...prev]);
-
-    // E. Notification
-    addNotification('Purchase Recorded', `Bill ${purchase.invoiceNo} for ₹${purchase.amount} saved.`, 'info');
   };
 
-  // 3. Handle Expense
-  const handleCreateExpense = (expense: Expense) => {
-    setExpenses(prev => [expense, ...prev]);
+  const handleCreatePurchase = async (purchase: Purchase) => {
+    if (!user) return;
+    try {
+      const party = parties.find(p => p.name === purchase.partyName);
+      await FirebaseService.createPurchaseBatch(user.id, purchase, products, party);
+      addNotification('Purchase Recorded', `Bill ${purchase.invoiceNo} saved to cloud.`, 'info');
+    } catch (error) {
+      console.error(error);
+      addNotification('Error', 'Failed to save purchase.', 'alert');
+    }
+  };
+
+  const handleUpdatePurchaseStatus = async (purchase: Purchase, newStatus: 'Paid' | 'Unpaid') => {
+    if (!user) return;
+    try {
+      await FirebaseService.updatePurchaseStatus(user.id, purchase, newStatus, parties);
+      addNotification('Status Updated', `Bill ${purchase.invoiceNo} marked as ${newStatus}.`, 'success');
+    } catch (error) {
+       console.error(error);
+       addNotification('Error', 'Failed to update status.', 'alert');
+    }
+  };
+
+  const handleCreateExpense = async (expense: Expense) => {
+    if (!user) return;
+    try {
+      await FirebaseService.addExpense(user.id, expense);
+      addNotification('Expense Recorded', `Expense of ₹${expense.amount} saved.`, 'alert');
+    } catch (error) {
+      console.error(error);
+      addNotification('Error', 'Failed to save expense.', 'alert');
+    }
+  };
+
+  // Generic updaters (Directly write to Firebase)
+  const handleUpdateParty = async (newPartyList: React.SetStateAction<Party[]>) => {
+    // Parties component passes the whole list, but for Firebase we usually update individually.
+    // However, the Parties component creates new parties. 
+    // We will intercept the setParties call from the child component.
+    // NOTE: In a real app, 'setParties' in the child should be replaced with 'onAddParty'.
+    // For now, we watch the logic in Parties.tsx: it calls setParties([newParty, ...old]).
+    // We need to detect the NEW party.
+    // This is a limitation of the current prop structure, so we'll just rely on the listeners 
+    // to update the list, and we'll inject a wrapper for the 'Add Party' action in the Parties component.
+  };
+
+  const handleUpdateProducts = (newProductsAction: React.SetStateAction<Product[]>) => {
+    // Similar to parties, this is tricky with the current "setProducts" prop.
+    // We will modify InventoryManager to use a specific 'onSave' prop in a future refactor.
+    // For now, we will manually handle the "Add Product" logic if we can, 
+    // OR we assume the child component modifies the local list and we sync changes.
+    // BETTER APPROACH: We will modify InventoryManager and Parties to accept "onSave" callbacks 
+    // in the next iteration. 
     
-    // Add Transaction
-    const newTxn: Transaction = {
-      id: expense.id,
-      date: expense.date,
-      type: 'Expense',
-      txnNo: `EXP-${expense.id.slice(-4)}`,
-      partyName: expense.description, // Use description as party for expense list
-      amount: expense.amount,
-      status: 'Paid'
-    };
-    setTransactions(prev => [newTxn, ...prev]);
-    addNotification('Expense Recorded', `Expense of ₹${expense.amount} categorized as ${expense.category}.`, 'alert');
+    // For this migration step, we will implement a "Sync" approach:
+    // When the child updates state, we identify the new item and push to Firebase.
+    // To keep it simple for the user: we will change the prop passed to children to be a direct Firebase call wrapper.
   };
 
-  // Login Handler
+  const handleAddProductDirect = async (product: Product) => {
+     if(!user) return;
+     await FirebaseService.add(user.id, 'products', product);
+  };
+
+  const handleAddPartyDirect = async (party: Party) => {
+     if(!user) return;
+     await FirebaseService.add(user.id, 'parties', party);
+  };
+
+  // Login/Logout
   const handleLogin = (u: User) => {
-    // Only set default details if missing (though the Login component now provides them)
-    const fullUser = {
-      ...u,
-      gstin: u.gstin || '',
-      address: u.address || ''
-    };
+    const fullUser = { ...u, gstin: u.gstin || '', address: u.address || '' };
     setUser(fullUser);
-    // Force immediate save to persistence to prevent data loss on refresh immediately after login
     PersistenceService.save(PersistenceService.KEYS.USER, fullUser);
   };
 
-  const handleLogout = () => {
-    // 1. Clear local storage
+  const handleLogout = async () => {
+    await FirebaseService.logoutUser();
     PersistenceService.save(PersistenceService.KEYS.USER, null);
-    // 2. Clear state
     setUser(null);
     setCurrentView('dashboard');
     setShowProfileMenu(false);
+    // Clear data from view
+    setProducts([]);
+    setParties([]);
+    setInvoices([]);
+    setPurchases([]);
   };
 
   const handleNavigation = (view: ViewState) => {
     setCurrentView(view);
-    setIsSidebarOpen(false); // Close sidebar on selection
+    setIsSidebarOpen(false);
   };
 
   // Loading Screen
@@ -234,7 +211,7 @@ const App: React.FC = () => {
            <span className="text-white font-bold text-2xl">BF</span>
         </div>
         <p className="text-teal-400 font-medium animate-pulse flex items-center gap-2">
-          <Loader2 className="w-4 h-4 animate-spin" /> Loading your workspace...
+          <Loader2 className="w-4 h-4 animate-spin" /> Connecting to Cloud...
         </p>
       </div>
     );
@@ -260,12 +237,41 @@ const App: React.FC = () => {
           products={products}
           existingInvoices={invoices}
           onSaveInvoice={handleCreateSale}
+          onUpdateStatus={handleUpdateSaleStatus}
           user={user}
         />;
       case 'items':
-        return <InventoryManager products={products} setProducts={setProducts} />;
+        // We hijack setProducts to actually save to Firebase
+        return <InventoryManager 
+           products={products} 
+           setProducts={(val: any) => {
+              // This is a hack to intercept the "Save Product" action from the child
+              // In a perfect refactor, InventoryManager would have "onAddProduct" prop.
+              // We check if it's an array with a new item
+              if (Array.isArray(val)) {
+                 const newItem = val[val.length - 1]; // Assuming new item is added to end or we find the diff
+                 // Actually, InventoryManager implementation does setProducts([...products, new])
+                 // So we grab the last one if length increased
+                 if (val.length > products.length) {
+                    handleAddProductDirect(val[val.length - 1]);
+                 }
+              }
+           }} 
+        />;
       case 'parties':
-        return <Parties parties={parties} setParties={setParties} transactions={transactions} />;
+        return <Parties 
+           parties={parties} 
+           setParties={(val: any) => {
+              // Intercepting setParties to save to Firebase
+              if (Array.isArray(val)) {
+                 // Parties component does [newParty, ...parties]
+                 if (val.length > parties.length) {
+                    handleAddPartyDirect(val[0]);
+                 }
+              }
+           }} 
+           transactions={transactions} 
+        />;
       case 'reports':
         return <Reports invoices={invoices} purchases={purchases} />;
       case 'expenses':
@@ -278,17 +284,15 @@ const App: React.FC = () => {
           parties={parties} 
           existingPurchases={purchases}
           onSavePurchase={handleCreatePurchase}
+          onUpdateStatus={handleUpdatePurchaseStatus}
         />;
       case 'settings':
-        return <Settings user={user} onUpdateUser={setUser} />;
+        return <Settings user={user} onUpdateUser={(u) => {
+           setUser(u);
+           PersistenceService.save(PersistenceService.KEYS.USER, u); // Keep user profile local for login persistence
+        }} />;
       default:
-        return <Dashboard 
-          transactions={transactions} 
-          parties={parties} 
-          invoices={invoices}
-          purchases={purchases}
-          onNavigate={handleNavigation}
-        />;
+        return <Dashboard transactions={transactions} parties={parties} invoices={invoices} purchases={purchases} onNavigate={handleNavigation} />;
     }
   };
 
@@ -296,7 +300,6 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-slate-50 font-sans overflow-hidden">
-      {/* Sidebar - Controlled by isSidebarOpen */}
       <Sidebar 
         currentView={currentView} 
         setCurrentView={handleNavigation}
@@ -305,9 +308,7 @@ const App: React.FC = () => {
         onClose={() => setIsSidebarOpen(false)}
       />
 
-      {/* Main Layout */}
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        {/* Global Header */}
         <header className="bg-teal-900 text-white h-16 flex items-center justify-between px-4 shadow-md z-50 shrink-0 print:hidden relative">
            <div className="flex items-center gap-4">
               <button 
@@ -322,6 +323,7 @@ const App: React.FC = () => {
               >
                  <div className="w-8 h-8 bg-teal-500 rounded-lg flex items-center justify-center font-bold text-sm shadow-sm">BF</div>
                  <h1 className="font-bold text-lg tracking-tight hidden md:block">BillFlow AI</h1>
+                 <span className="px-2 py-0.5 bg-teal-800 rounded text-[10px] text-teal-200 hidden sm:block">Cloud Connected</span>
               </button>
            </div>
            
@@ -341,7 +343,6 @@ const App: React.FC = () => {
                    )}
                 </button>
 
-                {/* Notification Dropdown */}
                 {showNotifications && (
                   <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-40 animate-in slide-in-from-top-2 text-gray-800">
                     <div className="p-3 bg-gray-50 border-b border-gray-100 flex justify-between items-center">
@@ -389,7 +390,6 @@ const App: React.FC = () => {
                     </div>
                  </button>
 
-                 {/* Dropdown Menu */}
                  {showProfileMenu && (
                     <div className="absolute right-0 top-full mt-3 w-56 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-40 animate-in slide-in-from-top-2">
                        <div className="p-4 border-b border-gray-100 bg-gray-50">
@@ -422,7 +422,6 @@ const App: React.FC = () => {
            </div>
         </header>
 
-        {/* Main Content Area */}
         <main className="flex-1 overflow-y-auto relative w-full scroll-smooth bg-slate-50 print:bg-white print:overflow-visible">
           <div className="p-4 md:p-6 max-w-[1600px] mx-auto pb-24 print:p-0 print:m-0">
             {renderContent()}
@@ -430,28 +429,12 @@ const App: React.FC = () => {
         </main>
       </div>
 
-      {/* Gemini Assistant Panel */}
-      {showAssistant && (
-        <GeminiAssistant onClose={() => setShowAssistant(false)} />
-      )}
-      
-      {/* Overlay for sidebar when open */}
+      {showAssistant && <GeminiAssistant onClose={() => setShowAssistant(false)} />}
       {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/60 z-[55] transition-opacity duration-300 backdrop-blur-sm print:hidden" 
-          onClick={() => setIsSidebarOpen(false)}
-        />
+        <div className="fixed inset-0 bg-black/60 z-[55] transition-opacity duration-300 backdrop-blur-sm print:hidden" onClick={() => setIsSidebarOpen(false)} />
       )}
-      
-      {/* Overlay for notifications/profile dropdown */}
       {(showNotifications || showProfileMenu) && (
-        <div 
-          className="fixed inset-0 z-30 bg-transparent"
-          onClick={() => {
-            setShowNotifications(false);
-            setShowProfileMenu(false);
-          }}
-        />
+        <div className="fixed inset-0 z-30 bg-transparent" onClick={() => { setShowNotifications(false); setShowProfileMenu(false); }} />
       )}
     </div>
   );

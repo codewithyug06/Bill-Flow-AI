@@ -1,17 +1,18 @@
 
 import React, { useState, useEffect } from 'react';
 import { InvoiceItem, Party, Product, User, Invoice } from '../types';
-import { Plus, Trash2, FileText, Printer, Send, ChevronLeft, CheckCircle2, Download, Search, Calendar, Eye, ArrowUpRight, ArrowDownLeft, Wallet, Filter, ChevronDown, Mail, Loader2 } from 'lucide-react';
+import { Plus, Trash2, FileText, Printer, Send, ChevronLeft, CheckCircle2, Download, Search, Calendar, Eye, ArrowUpRight, ArrowDownLeft, Wallet, Filter, ChevronDown, Mail, Loader2, RefreshCw } from 'lucide-react';
 
 interface InvoiceBuilderProps {
   parties?: Party[];
   products: Product[];
   existingInvoices?: Invoice[];
   onSaveInvoice: (invoice: Invoice) => void;
+  onUpdateStatus?: (invoice: Invoice, newStatus: 'Paid' | 'Pending') => void;
   user?: User | null;
 }
 
-export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], products = [], existingInvoices = [], onSaveInvoice, user }) => {
+export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], products = [], existingInvoices = [], onSaveInvoice, onUpdateStatus, user }) => {
   const [view, setView] = useState<'list' | 'edit' | 'preview'>('list');
   const [customer, setCustomer] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -182,6 +183,15 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
     setView('preview');
   };
 
+  const toggleStatus = (inv: Invoice) => {
+     if (onUpdateStatus) {
+        const newStatus = inv.status === 'Paid' ? 'Pending' : 'Paid';
+        if (confirm(`Change status of ${inv.invoiceNo} to ${newStatus}? This will adjust the customer's balance.`)) {
+           onUpdateStatus(inv, newStatus);
+        }
+     }
+  };
+
   useEffect(() => {
     if (view === 'preview' && autoPrint) {
       const timer = setTimeout(() => {
@@ -295,13 +305,16 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                            <td className="px-6 py-4 font-medium text-gray-800">{inv.customerName}</td>
                            <td className="px-6 py-4 text-right font-medium">₹ {inv.total.toLocaleString()}</td>
                            <td className="px-6 py-4 text-center">
-                              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                              <button 
+                                onClick={() => toggleStatus(inv)}
+                                className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1 mx-auto transition-all ${
                                   inv.status === 'Paid' 
-                                  ? 'bg-emerald-100 text-emerald-700' 
-                                  : 'bg-orange-100 text-orange-600'
+                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200' 
+                                  : 'bg-orange-100 text-orange-600 border-orange-200 hover:bg-orange-200'
                               }`}>
                                   {inv.status}
-                              </span>
+                                  <RefreshCw className="w-3 h-3 opacity-50" />
+                              </button>
                            </td>
                            <td className="px-4 py-4 text-center">
                                <button 

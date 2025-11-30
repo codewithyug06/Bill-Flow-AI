@@ -1,199 +1,239 @@
 
 import React, { useState } from 'react';
 import { User } from '../types';
-import { ArrowRight, Lock, Phone, ShieldCheck, Building, User as UserIcon } from 'lucide-react';
+import { ArrowRight, Lock, Mail, Building, User as UserIcon, Loader2, AlertCircle, FileText, BarChart3, Package, CheckCircle2 } from 'lucide-react';
+import { FirebaseService } from '../services/firebase';
 
 interface LoginProps {
   onLogin: (user: User) => void;
 }
 
 export const Login: React.FC<LoginProps> = ({ onLogin }) => {
-  const [step, setStep] = useState<'phone' | 'otp' | 'profile'>('phone');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
+  const [isLoginMode, setIsLoginMode] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Form State
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [businessName, setBusinessName] = useState('');
   const [ownerName, setOwnerName] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [phone, setPhone] = useState('');
 
-  const handleSendOtp = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (phone.length >= 10) {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        setStep('otp');
-      }, 1000);
-    }
-  };
+    setError(null);
+    setLoading(true);
 
-  const handleVerifyOtp = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (otp.length === 4) {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        setStep('profile'); // Move to profile setup instead of direct login
-      }, 1000);
-    }
-  };
-
-  const handleCompleteSetup = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (businessName && ownerName) {
-      setLoading(true);
-      setTimeout(() => {
-        setLoading(false);
-        onLogin({
-          id: 'u-' + Date.now(),
+    try {
+      if (isLoginMode) {
+        // Sign In
+        const user = await FirebaseService.loginUser(email, password);
+        onLogin(user);
+      } else {
+        // Sign Up
+        if (!businessName || !ownerName) {
+          throw new Error("Business details are required.");
+        }
+        const user = await FirebaseService.registerUser(email, password, {
           name: ownerName,
+          businessName: businessName,
           phone: phone,
-          businessName: businessName
+          gstin: '',
+          address: ''
         });
-      }, 800);
+        onLogin(user);
+      }
+    } catch (err: any) {
+      console.error(err);
+      let msg = "Authentication failed. Please try again.";
+      if (err.code === 'auth/invalid-credential') msg = "Invalid email or password.";
+      if (err.code === 'auth/email-already-in-use') msg = "Email already in use. Please login.";
+      if (err.code === 'auth/weak-password') msg = "Password should be at least 6 characters.";
+      setError(msg);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row">
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 relative overflow-hidden">
+      
+      {/* Background Decor */}
+      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-teal-200/40 rounded-full blur-[120px]" />
+        <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] bg-indigo-200/40 rounded-full blur-[120px]" />
+      </div>
+
+      <div className="bg-white w-full max-w-[1100px] rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[650px] relative z-10 border border-white/50">
         
-        {/* Left Side - Branding */}
-        <div className="md:w-1/2 bg-[#0f172a] p-8 md:p-12 text-white flex flex-col justify-between relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-teal-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 -translate-y-1/2 translate-x-1/2 animate-blob"></div>
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-emerald-500 rounded-full mix-blend-multiply filter blur-3xl opacity-20 translate-y-1/2 -translate-x-1/2 animate-blob animation-delay-2000"></div>
+        {/* LEFT SIDE: Feature Highlight */}
+        <div className="md:w-5/12 bg-slate-900 relative p-8 md:p-12 text-white flex flex-col justify-between overflow-hidden">
+          {/* Abstract Glows */}
+          <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
           
           <div className="relative z-10">
-            <div className="flex items-center gap-3 mb-8">
-              <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-emerald-600 rounded-lg flex items-center justify-center font-bold text-xl text-white shadow-lg">BF</div>
-              <h1 className="text-2xl font-bold tracking-tight">BillFlow AI</h1>
+            {/* Branding */}
+            <div className="flex items-center gap-3 mb-10">
+              <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-indigo-500 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-teal-500/20">
+                BF
+              </div>
+              <span className="text-xl font-bold tracking-tight">BillFlow AI</span>
             </div>
+
+            <h2 className="text-3xl md:text-4xl font-bold leading-tight mb-6">
+              Powering Business with <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">Intelligence.</span>
+            </h2>
             
-            <div className="space-y-6">
-              <h2 className="text-3xl font-bold leading-tight">Manage your business <span className="text-teal-400">flow</span> with intelligence.</h2>
-              <ul className="space-y-4 text-gray-300">
-                <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></div> Smart Inventory Tracking</li>
-                <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></div> GST Compliant Invoicing</li>
-                <li className="flex items-center gap-3"><div className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></div> Automated Payment Reminders</li>
-              </ul>
+            <p className="text-slate-400 text-sm md:text-base mb-8 leading-relaxed">
+              Streamline your invoicing, inventory, and accounting with our next-gen platform designed for modern growth.
+            </p>
+
+            {/* Feature Cards */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-4 p-3 rounded-xl bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/10 transition-colors">
+                <div className="w-10 h-10 rounded-lg bg-teal-500/20 flex items-center justify-center text-teal-400 shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-sm text-slate-100">Smart Invoicing</h4>
+                  <p className="text-xs text-slate-400">GST compliant, professional bills in seconds.</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 p-3 rounded-xl bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/10 transition-colors">
+                <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
+                  <BarChart3 className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-sm text-slate-100">AI Analytics</h4>
+                  <p className="text-xs text-slate-400">Deep insights into your sales & purchases.</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4 p-3 rounded-xl bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/10 transition-colors">
+                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                  <Package className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="font-semibold text-sm text-slate-100">Inventory Sync</h4>
+                  <p className="text-xs text-slate-400">Real-time stock tracking & adjustments.</p>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="relative z-10 mt-8 text-xs text-gray-500">
-            © 2025 BillFlow AI. All rights reserved.
+          <div className="relative z-10 mt-8 pt-6 border-t border-slate-800 flex items-center gap-6 text-[10px] text-slate-500 font-medium uppercase tracking-wider">
+            <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-emerald-500"/> Secure Cloud</span>
+            <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-emerald-500"/> 24/7 Support</span>
           </div>
         </div>
 
-        {/* Right Side - Form */}
-        <div className="md:w-1/2 p-8 md:p-12 flex flex-col justify-center">
+        {/* RIGHT SIDE: Login Form */}
+        <div className="md:w-7/12 p-8 md:p-16 bg-white flex flex-col justify-center">
           <div className="max-w-md mx-auto w-full">
-            <h3 className="text-2xl font-bold text-gray-900 mb-2">
-              {step === 'phone' ? 'Welcome Back' : step === 'otp' ? 'Enter Verification Code' : 'Setup Profile'}
-            </h3>
-            <p className="text-gray-500 mb-8">
-              {step === 'phone' ? 'Enter your mobile number to continue' : step === 'otp' ? `We sent a 4-digit code to +91 ${phone}` : 'Tell us about your business'}
-            </p>
+            <div className="mb-8">
+              <h3 className="text-3xl font-bold text-gray-900 mb-2">
+                {isLoginMode ? 'Welcome Back' : 'Create Account'}
+              </h3>
+              <p className="text-gray-500">
+                {isLoginMode ? 'Enter your credentials to access your dashboard' : 'Fill in your business details to get started'}
+              </p>
+            </div>
 
-            {step === 'phone' && (
-              <form onSubmit={handleSendOtp} className="space-y-5">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Mobile Number</label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm font-medium">+91</span>
-                    <input 
-                      type="tel" 
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
-                      placeholder="98765 43210"
-                      value={phone}
-                      onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                      required
-                    />
-                    <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  </div>
-                </div>
-                <button 
-                  type="submit" 
-                  disabled={loading || phone.length < 10}
-                  className="w-full bg-teal-600 text-white py-3 rounded-lg font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
-                >
-                  {loading ? 'Sending...' : 'Get OTP'} <ArrowRight className="w-4 h-4" />
-                </button>
-              </form>
+            {error && (
+              <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm flex items-start gap-3 mb-6 border border-red-100 animate-in slide-in-from-top-2">
+                 <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /> 
+                 <span>{error}</span>
+              </div>
             )}
 
-            {step === 'otp' && (
-              <form onSubmit={handleVerifyOtp} className="space-y-5">
-                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">OTP Code (Use 1234)</label>
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      className="w-full pl-4 pr-10 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all tracking-widest text-center text-lg font-bold"
-                      placeholder="• • • •"
-                      value={otp}
-                      onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                      autoFocus
-                    />
-                    <Lock className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <form onSubmit={handleSubmit} className="space-y-5">
+              
+              {!isLoginMode && (
+                <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-right-4">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Owner Name</label>
+                    <div className="relative group">
+                      <input 
+                        type="text" 
+                        required={!isLoginMode}
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-none transition-all text-sm font-medium text-gray-900 placeholder-gray-400"
+                        placeholder="John Doe"
+                        value={ownerName}
+                        onChange={e => setOwnerName(e.target.value)}
+                      />
+                      <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-teal-500 transition-colors" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Business Name</label>
+                    <div className="relative group">
+                      <input 
+                        type="text" 
+                        required={!isLoginMode}
+                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-none transition-all text-sm font-medium text-gray-900 placeholder-gray-400"
+                        placeholder="Acme Corp"
+                        value={businessName}
+                        onChange={e => setBusinessName(e.target.value)}
+                      />
+                      <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-teal-500 transition-colors" />
+                    </div>
                   </div>
                 </div>
-                <button 
-                  type="submit" 
-                  disabled={loading || otp.length < 4}
-                  className="w-full bg-teal-600 text-white py-3 rounded-lg font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
-                >
-                  {loading ? 'Verifying...' : 'Verify OTP'} <ShieldCheck className="w-4 h-4" />
-                </button>
-                <button 
-                  type="button" 
-                  onClick={() => setStep('phone')}
-                  className="w-full text-sm text-gray-500 hover:text-gray-700 font-medium"
-                >
-                  Change Mobile Number
-                </button>
-              </form>
-            )}
+              )}
 
-            {step === 'profile' && (
-              <form onSubmit={handleCompleteSetup} className="space-y-5 animate-in slide-in-from-right">
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Business / Company Name</label>
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
-                      placeholder="e.g. Acme Traders Pvt Ltd"
-                      value={businessName}
-                      onChange={e => setBusinessName(e.target.value)}
-                      required
-                    />
-                    <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Email Address</label>
+                <div className="relative group">
+                  <input 
+                    type="email" 
+                    required
+                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-none transition-all text-sm font-medium text-gray-900 placeholder-gray-400"
+                    placeholder="you@company.com"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                  />
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-teal-500 transition-colors" />
                 </div>
+              </div>
 
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">Your Name (Owner)</label>
-                  <div className="relative">
-                    <input 
-                      type="text" 
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-transparent outline-none transition-all"
-                      placeholder="e.g. John Doe"
-                      value={ownerName}
-                      onChange={e => setOwnerName(e.target.value)}
-                      required
-                    />
-                    <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-                  </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Password</label>
+                <div className="relative group">
+                  <input 
+                    type="password" 
+                    required
+                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-none transition-all text-sm font-medium text-gray-900 placeholder-gray-400"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                  />
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-teal-500 transition-colors" />
                 </div>
+              </div>
 
+              <button 
+                type="submit" 
+                disabled={loading}
+                className="w-full bg-teal-600 text-white py-4 rounded-xl font-bold hover:bg-teal-700 active:scale-[0.98] transition-all shadow-lg shadow-teal-600/20 disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center gap-2 mt-4 text-sm"
+              >
+                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
+                {loading ? (isLoginMode ? 'Signing In...' : 'Creating Account...') : (isLoginMode ? 'Sign In' : 'Create Account')} 
+              </button>
+            </form>
+
+            <div className="mt-8 text-center pt-6 border-t border-gray-100">
+              <p className="text-sm text-gray-500">
+                {isLoginMode ? "New to BillFlow?" : "Already have an account?"}
                 <button 
-                  type="submit" 
-                  disabled={loading || !businessName || !ownerName}
-                  className="w-full bg-teal-600 text-white py-3 rounded-lg font-semibold hover:bg-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2"
+                  onClick={() => { setIsLoginMode(!isLoginMode); setError(null); }}
+                  className="ml-2 font-bold text-teal-600 hover:text-teal-700 transition-colors hover:underline"
                 >
-                  {loading ? 'Setting up...' : 'Start Billing'} <ArrowRight className="w-4 h-4" />
+                  {isLoginMode ? "Create an account" : "Sign in here"}
                 </button>
-              </form>
-            )}
+              </p>
+            </div>
           </div>
         </div>
       </div>

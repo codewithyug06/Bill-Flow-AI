@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Search, Plus, Filter, Calendar, Eye, FileText, ArrowUpRight, ArrowDownLeft, Trash2, ChevronLeft, CheckCircle2, Printer, Download, Save, ChevronDown } from 'lucide-react';
+import { Search, Plus, Filter, Calendar, Eye, FileText, ArrowUpRight, ArrowDownLeft, Trash2, ChevronLeft, CheckCircle2, Printer, Download, Save, ChevronDown, RefreshCw } from 'lucide-react';
 import { Product, Party, Purchase } from '../types';
 
 interface PurchaseInvoicesProps {
@@ -8,9 +8,10 @@ interface PurchaseInvoicesProps {
   parties?: Party[];
   existingPurchases: Purchase[];
   onSavePurchase: (purchase: Purchase) => void;
+  onUpdateStatus?: (purchase: Purchase, newStatus: 'Paid' | 'Unpaid') => void;
 }
 
-export const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ products, parties = [], existingPurchases, onSavePurchase }) => {
+export const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ products, parties = [], existingPurchases, onSavePurchase, onUpdateStatus }) => {
   const [view, setView] = useState<'list' | 'create' | 'preview'>('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('Last 365 Days');
@@ -117,6 +118,15 @@ export const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ products, pa
   const handleViewInvoice = (invoice: Purchase) => {
      setSelectedInvoice(invoice);
      setView('preview');
+  };
+
+  const toggleStatus = (inv: Purchase) => {
+     if (onUpdateStatus) {
+        const newStatus = inv.status === 'Paid' ? 'Unpaid' : 'Paid';
+        if (confirm(`Change status of ${inv.invoiceNo} to ${newStatus}? This will adjust the vendor's balance.`)) {
+           onUpdateStatus(inv, newStatus);
+        }
+     }
   };
 
   useEffect(() => {
@@ -240,13 +250,16 @@ export const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ products, pa
                               {inv.unpaidAmount > 0 && <div className="text-xs text-red-500">(₹ {inv.unpaidAmount.toLocaleString()} unpaid)</div>}
                            </td>
                            <td className="px-6 py-4 text-center">
-                              <span className={`px-3 py-1 rounded-full text-xs font-bold ${
+                              <button 
+                                onClick={() => toggleStatus(inv)}
+                                className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1 mx-auto transition-all ${
                                  inv.status === 'Paid' 
-                                 ? 'bg-emerald-100 text-emerald-700' 
-                                 : 'bg-red-100 text-red-600'
+                                 ? 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200' 
+                                 : 'bg-red-100 text-red-600 border-red-200 hover:bg-red-200'
                               }`}>
                                  {inv.status}
-                              </span>
+                                 <RefreshCw className="w-3 h-3 opacity-50" />
+                              </button>
                            </td>
                            <td className="px-4 py-4 text-center">
                                <button 
