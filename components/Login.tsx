@@ -1,8 +1,9 @@
 
 import React, { useState } from 'react';
 import { User } from '../types';
-import { ArrowRight, Lock, Mail, Building, User as UserIcon, Loader2, AlertCircle, FileText, BarChart3, Package, CheckCircle2 } from 'lucide-react';
+import { ArrowRight, Lock, Mail, Building, User as UserIcon, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { FirebaseService } from '../services/firebase';
+import { BrandLogo } from './BrandLogo';
 
 interface LoginProps {
   onLogin: (user: User) => void;
@@ -19,6 +20,10 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [businessName, setBusinessName] = useState('');
   const [ownerName, setOwnerName] = useState('');
   const [phone, setPhone] = useState('');
+  
+  // Staff Logic
+  const [role, setRole] = useState<'owner' | 'staff'>('owner');
+  const [businessCode, setBusinessCode] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,16 +37,26 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         onLogin(user);
       } else {
         // Sign Up
-        if (!businessName || !ownerName) {
+        if (role === 'owner' && (!businessName || !ownerName)) {
           throw new Error("Business details are required.");
         }
-        const user = await FirebaseService.registerUser(email, password, {
-          name: ownerName,
-          businessName: businessName,
-          phone: phone,
-          gstin: '',
-          address: ''
-        });
+        if (role === 'staff' && (!ownerName || !businessCode)) {
+          throw new Error("Staff name and Business Code are required.");
+        }
+
+        const user = await FirebaseService.registerUser(
+          email, 
+          password, 
+          {
+            name: ownerName,
+            businessName: role === 'owner' ? businessName : 'Joining...',
+            phone: phone,
+            gstin: '',
+            address: ''
+          },
+          role,
+          businessCode
+        );
         onLogin(user);
       }
     } catch (err: any) {
@@ -50,192 +65,208 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
       if (err.code === 'auth/invalid-credential') msg = "Invalid email or password.";
       if (err.code === 'auth/email-already-in-use') msg = "Email already in use. Please login.";
       if (err.code === 'auth/weak-password') msg = "Password should be at least 6 characters.";
+      if (err.message) msg = err.message;
       setError(msg);
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 relative overflow-hidden">
+    <div className="min-h-screen flex font-sans bg-slate-950">
       
-      {/* Background Decor */}
-      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-[20%] -left-[10%] w-[50%] h-[50%] bg-teal-200/40 rounded-full blur-[120px]" />
-        <div className="absolute -bottom-[20%] -right-[10%] w-[50%] h-[50%] bg-indigo-200/40 rounded-full blur-[120px]" />
+      {/* LEFT SIDE: Feature Showcase */}
+      <div className="hidden lg:flex w-[55%] relative overflow-hidden items-center justify-center">
+        {/* Background Image */}
+        <div 
+          className="absolute inset-0 bg-cover bg-center opacity-40 scale-105"
+          style={{ 
+            backgroundImage: 'url("https://images.unsplash.com/photo-1551288049-bebda4e38f71?q=80&w=2070&auto=format&fit=crop")',
+          }} 
+        ></div>
+        
+        {/* Gradient Overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-900/90 to-slate-900/60 backdrop-blur-sm"></div>
+
+        {/* Content */}
+        <div className="relative z-10 p-16 w-full max-w-3xl">
+           <div className="flex items-center gap-4 mb-10 animate-in fade-in slide-in-from-left-6 duration-700">
+              <div className="w-20 h-20 bg-white/10 rounded-2xl flex items-center justify-center backdrop-blur-md border border-white/20 shadow-xl shadow-teal-900/20">
+                 <BrandLogo className="w-14 h-14" variant="white" />
+              </div>
+              <div>
+                <h1 className="text-4xl font-bold text-white tracking-tight">BillFlow AI</h1>
+                <p className="text-teal-400 text-lg font-medium">Smart Business Intelligence</p>
+              </div>
+           </div>
+           
+           <h2 className="text-5xl font-extrabold text-white leading-tight mb-8 drop-shadow-lg">
+             Automate Billing. <br/>
+             <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">Track Inventory.</span> <br/>
+             Grow Faster.
+           </h2>
+
+           <div className="space-y-4 max-w-lg">
+              <div className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-xl backdrop-blur-md hover:bg-white/10 transition-colors">
+                <div className="p-2 bg-teal-500/20 rounded-lg">
+                  <CheckCircle2 className="w-6 h-6 text-teal-400" />
+                </div>
+                <div>
+                  <h3 className="text-white font-semibold">AI-Powered Insights</h3>
+                  <p className="text-slate-400 text-sm">Get real-time suggestions to optimize your cash flow.</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-xl backdrop-blur-md hover:bg-white/10 transition-colors">
+                 <div className="p-2 bg-emerald-500/20 rounded-lg">
+                  <CheckCircle2 className="w-6 h-6 text-emerald-400" />
+                 </div>
+                 <div>
+                  <h3 className="text-white font-semibold">GST Ready Invoicing</h3>
+                  <p className="text-slate-400 text-sm">Create professional, compliant bills in seconds.</p>
+                 </div>
+              </div>
+           </div>
+        </div>
       </div>
 
-      <div className="bg-white w-full max-w-[1100px] rounded-3xl shadow-2xl overflow-hidden flex flex-col md:flex-row min-h-[650px] relative z-10 border border-white/50">
-        
-        {/* LEFT SIDE: Feature Highlight */}
-        <div className="md:w-5/12 bg-slate-900 relative p-8 md:p-12 text-white flex flex-col justify-between overflow-hidden">
-          {/* Abstract Glows */}
-          <div className="absolute top-0 right-0 w-96 h-96 bg-teal-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-indigo-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
-          
-          <div className="relative z-10">
-            {/* Branding */}
-            <div className="flex items-center gap-3 mb-10">
-              <div className="w-10 h-10 bg-gradient-to-br from-teal-400 to-indigo-500 rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-teal-500/20">
-                BF
-              </div>
-              <span className="text-xl font-bold tracking-tight">BillFlow AI</span>
+      {/* RIGHT SIDE: Login Form */}
+      <div className="w-full lg:w-[45%] relative flex items-center justify-center p-6 md:p-12">
+         
+         {/* Decorative Glows */}
+         <div className="absolute top-[-20%] right-[-10%] w-[600px] h-[600px] bg-teal-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+         <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[100px] pointer-events-none"></div>
+
+         <div className="w-full max-w-md relative z-10">
+            {/* Mobile Branding */}
+            <div className="lg:hidden flex flex-col items-center mb-8">
+               <BrandLogo className="w-16 h-16 mb-4" variant="color" />
+               <h1 className="text-3xl font-bold text-white">BillFlow AI</h1>
             </div>
 
-            <h2 className="text-3xl md:text-4xl font-bold leading-tight mb-6">
-              Powering Business with <span className="text-transparent bg-clip-text bg-gradient-to-r from-teal-400 to-emerald-400">Intelligence.</span>
-            </h2>
-            
-            <p className="text-slate-400 text-sm md:text-base mb-8 leading-relaxed">
-              Streamline your invoicing, inventory, and accounting with our next-gen platform designed for modern growth.
-            </p>
-
-            {/* Feature Cards */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-4 p-3 rounded-xl bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/10 transition-colors">
-                <div className="w-10 h-10 rounded-lg bg-teal-500/20 flex items-center justify-center text-teal-400 shrink-0">
-                  <FileText className="w-5 h-5" />
+            <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 md:p-10 rounded-3xl shadow-2xl">
+                <div className="text-center mb-8">
+                   <h2 className="text-2xl font-bold text-white mb-2">{isLoginMode ? 'Welcome Back' : 'Create Account'}</h2>
+                   <p className="text-slate-400 text-sm">
+                     {isLoginMode ? 'Enter your credentials to access your dashboard' : 'Join thousands of businesses growing with us'}
+                   </p>
                 </div>
-                <div>
-                  <h4 className="font-semibold text-sm text-slate-100">Smart Invoicing</h4>
-                  <p className="text-xs text-slate-400">GST compliant, professional bills in seconds.</p>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-4 p-3 rounded-xl bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/10 transition-colors">
-                <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 shrink-0">
-                  <BarChart3 className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-sm text-slate-100">AI Analytics</h4>
-                  <p className="text-xs text-slate-400">Deep insights into your sales & purchases.</p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-4 p-3 rounded-xl bg-white/5 backdrop-blur-md border border-white/10 hover:bg-white/10 transition-colors">
-                <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
-                  <Package className="w-5 h-5" />
-                </div>
-                <div>
-                  <h4 className="font-semibold text-sm text-slate-100">Inventory Sync</h4>
-                  <p className="text-xs text-slate-400">Real-time stock tracking & adjustments.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="relative z-10 mt-8 pt-6 border-t border-slate-800 flex items-center gap-6 text-[10px] text-slate-500 font-medium uppercase tracking-wider">
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-emerald-500"/> Secure Cloud</span>
-            <span className="flex items-center gap-1.5"><CheckCircle2 className="w-3 h-3 text-emerald-500"/> 24/7 Support</span>
-          </div>
-        </div>
-
-        {/* RIGHT SIDE: Login Form */}
-        <div className="md:w-7/12 p-8 md:p-16 bg-white flex flex-col justify-center">
-          <div className="max-w-md mx-auto w-full">
-            <div className="mb-8">
-              <h3 className="text-3xl font-bold text-gray-900 mb-2">
-                {isLoginMode ? 'Welcome Back' : 'Create Account'}
-              </h3>
-              <p className="text-gray-500">
-                {isLoginMode ? 'Enter your credentials to access your dashboard' : 'Fill in your business details to get started'}
-              </p>
-            </div>
-
-            {error && (
-              <div className="bg-red-50 text-red-600 p-4 rounded-xl text-sm flex items-start gap-3 mb-6 border border-red-100 animate-in slide-in-from-top-2">
-                 <AlertCircle className="w-5 h-5 shrink-0 mt-0.5" /> 
-                 <span>{error}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-5">
-              
-              {!isLoginMode && (
-                <div className="grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-right-4">
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Owner Name</label>
-                    <div className="relative group">
-                      <input 
-                        type="text" 
-                        required={!isLoginMode}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-none transition-all text-sm font-medium text-gray-900 placeholder-gray-400"
-                        placeholder="John Doe"
-                        value={ownerName}
-                        onChange={e => setOwnerName(e.target.value)}
-                      />
-                      <UserIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-teal-500 transition-colors" />
-                    </div>
+                {error && (
+                  <div className="bg-red-500/10 border border-red-500/20 text-red-200 p-4 rounded-xl text-sm flex items-start gap-3 mb-6">
+                     <AlertCircle className="w-5 h-5 shrink-0 mt-0.5 text-red-400" /> 
+                     <span>{error}</span>
                   </div>
-                  <div className="space-y-1.5">
-                    <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Business Name</label>
-                    <div className="relative group">
+                )}
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                   
+                   {!isLoginMode && (
+                     <div className="grid grid-cols-2 gap-2 bg-slate-900/50 p-1.5 rounded-xl border border-white/10">
+                        <button 
+                          type="button"
+                          onClick={() => setRole('owner')} 
+                          className={`py-2 text-sm font-medium rounded-lg transition-all ${role === 'owner' ? 'bg-slate-800 text-teal-400 shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                          Owner
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => setRole('staff')} 
+                          className={`py-2 text-sm font-medium rounded-lg transition-all ${role === 'staff' ? 'bg-slate-800 text-teal-400 shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300'}`}
+                        >
+                          Staff
+                        </button>
+                     </div>
+                   )}
+
+                   {!isLoginMode && (
+                     <div className="space-y-5 animate-in slide-in-from-right-4 fade-in">
+                        <div className="relative group">
+                           <input 
+                             type="text" 
+                             required
+                             className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
+                             placeholder={role === 'owner' ? "Owner Name" : "Your Name"}
+                             value={ownerName}
+                             onChange={e => setOwnerName(e.target.value)}
+                           />
+                           <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
+                        </div>
+
+                        {role === 'owner' ? (
+                           <div className="relative group">
+                              <input 
+                                 type="text" 
+                                 required
+                                 className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
+                                 placeholder="Business Name"
+                                 value={businessName}
+                                 onChange={e => setBusinessName(e.target.value)}
+                              />
+                              <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
+                           </div>
+                        ) : (
+                           <div className="relative group">
+                              <input 
+                                 type="text" 
+                                 required
+                                 className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
+                                 placeholder="Business Code (Ask Owner)"
+                                 value={businessCode}
+                                 onChange={e => setBusinessCode(e.target.value)}
+                              />
+                              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
+                           </div>
+                        )}
+                     </div>
+                   )}
+
+                   <div className="relative group">
                       <input 
-                        type="text" 
-                        required={!isLoginMode}
-                        className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-none transition-all text-sm font-medium text-gray-900 placeholder-gray-400"
-                        placeholder="Acme Corp"
-                        value={businessName}
-                        onChange={e => setBusinessName(e.target.value)}
+                        type="email" 
+                        required
+                        className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
+                        placeholder="Email Address"
+                        value={email}
+                        onChange={e => setEmail(e.target.value)}
                       />
-                      <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-teal-500 transition-colors" />
-                    </div>
-                  </div>
+                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
+                   </div>
+
+                   <div className="relative group">
+                      <input 
+                        type="password" 
+                        required
+                        className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
+                        placeholder="Password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                      />
+                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
+                   </div>
+
+                   <button 
+                     type="submit" 
+                     disabled={loading}
+                     className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-teal-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-70 disabled:cursor-not-allowed text-sm"
+                   >
+                     {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
+                     {isLoginMode ? 'Sign In' : 'Create Account'}
+                   </button>
+                </form>
+
+                <div className="mt-8 text-center pt-6 border-t border-white/5">
+                   <p className="text-sm text-slate-400">
+                      {isLoginMode ? "Don't have an account?" : "Already have an account?"}
+                      <button 
+                         onClick={() => { setIsLoginMode(!isLoginMode); setError(null); }}
+                         className="ml-2 font-bold text-teal-400 hover:text-teal-300 transition-colors underline decoration-transparent hover:decoration-teal-400"
+                      >
+                         {isLoginMode ? "Sign up" : "Log in"}
+                      </button>
+                   </p>
                 </div>
-              )}
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Email Address</label>
-                <div className="relative group">
-                  <input 
-                    type="email" 
-                    required
-                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-none transition-all text-sm font-medium text-gray-900 placeholder-gray-400"
-                    placeholder="you@company.com"
-                    value={email}
-                    onChange={e => setEmail(e.target.value)}
-                  />
-                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-teal-500 transition-colors" />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Password</label>
-                <div className="relative group">
-                  <input 
-                    type="password" 
-                    required
-                    className="w-full pl-10 pr-4 py-3 bg-gray-50 border-2 border-transparent rounded-xl focus:bg-white focus:border-teal-500 focus:ring-4 focus:ring-teal-500/10 outline-none transition-all text-sm font-medium text-gray-900 placeholder-gray-400"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                  />
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 group-focus-within:text-teal-500 transition-colors" />
-                </div>
-              </div>
-
-              <button 
-                type="submit" 
-                disabled={loading}
-                className="w-full bg-teal-600 text-white py-4 rounded-xl font-bold hover:bg-teal-700 active:scale-[0.98] transition-all shadow-lg shadow-teal-600/20 disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center gap-2 mt-4 text-sm"
-              >
-                {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
-                {loading ? (isLoginMode ? 'Signing In...' : 'Creating Account...') : (isLoginMode ? 'Sign In' : 'Create Account')} 
-              </button>
-            </form>
-
-            <div className="mt-8 text-center pt-6 border-t border-gray-100">
-              <p className="text-sm text-gray-500">
-                {isLoginMode ? "New to BillFlow?" : "Already have an account?"}
-                <button 
-                  onClick={() => { setIsLoginMode(!isLoginMode); setError(null); }}
-                  className="ml-2 font-bold text-teal-600 hover:text-teal-700 transition-colors hover:underline"
-                >
-                  {isLoginMode ? "Create an account" : "Sign in here"}
-                </button>
-              </p>
             </div>
-          </div>
-        </div>
+         </div>
       </div>
     </div>
   );

@@ -16,14 +16,14 @@ import { Invoice, Purchase, Product, Party, Transaction, Expense, User } from ".
 
 // --- CONFIGURE YOUR FIREBASE PROJECT HERE ---
 const firebaseConfig = {
-  apiKey: "AIzaSyA5cDKcWc_sfWihsB4-HszYLDm-RMHylNY",
+  apiKey: "AIzaSyA5cDKcWc_sfWB4-HszYLDm-RMHylNY",
   authDomain: "bill-flow-ai.firebaseapp.com",
   databaseURL: "https://bill-flow-ai-default-rtdb.firebaseio.com",
   projectId: "bill-flow-ai",
   storageBucket: "bill-flow-ai.firebasestorage.app",
-  messagingSenderId: "78387162300",
-  appId: "1:78387162300:web:2a18d24f73617d49d5b4b9",
-  measurementId: "G-J8Y11F0ZCN"
+  messagingSenderId: "78387300",
+  appId: "1:78387162300:web:2a18d24f7d49d5b4b9",
+  measurementId: "G-J8YF0ZCN"
 };
 
 // Initialize Firebase
@@ -46,15 +46,58 @@ export const FirebaseService = {
     if (userDoc.exists()) {
       return { id: uid, ...userDoc.data() } as User;
     } else {
-      return { id: uid, name: 'User', businessName: 'My Business', phone: '' };
+      // Fallback for legacy users
+      return { 
+        id: uid, 
+        name: 'User', 
+        businessName: 'My Business', 
+        phone: '', 
+        role: 'owner', 
+        businessId: uid 
+      };
     }
   },
 
-  registerUser: async (email: string, pass: string, profile: Omit<User, 'id'>): Promise<User> => {
+  // Updated Register to handle Staff Joining
+  registerUser: async (
+    email: string, 
+    pass: string, 
+    profile: Omit<User, 'id' | 'role' | 'businessId'>, 
+    role: 'owner' | 'staff' = 'owner',
+    targetBusinessId?: string
+  ): Promise<User> => {
+    
+    // If joining as staff, verify business exists first
+    let finalBusinessId = '';
+    let finalBusinessName = profile.businessName;
+
+    if (role === 'staff') {
+      if (!targetBusinessId) throw new Error("Business Code is required for staff.");
+      
+      const ownerDoc = await getDoc(doc(db, "users", targetBusinessId));
+      if (!ownerDoc.exists()) {
+        throw new Error("Invalid Business Code. Business not found.");
+      }
+      finalBusinessId = targetBusinessId;
+      finalBusinessName = ownerDoc.data()?.businessName || profile.businessName;
+    }
+
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
     const uid = userCredential.user.uid;
     
-    const newUser: User = { id: uid, ...profile };
+    // If owner, businessId is their own UID
+    if (role === 'owner') {
+      finalBusinessId = uid;
+    }
+
+    const newUser: User = { 
+      id: uid, 
+      ...profile,
+      businessName: finalBusinessName,
+      role, 
+      businessId: finalBusinessId 
+    };
+
     await setDoc(doc(db, "users", uid), newUser);
     return newUser;
   },
@@ -63,8 +106,9 @@ export const FirebaseService = {
     await signOut(auth);
   },
 
-  subscribe: (userId: string, collectionName: string, callback: (data: any[]) => void) => {
-    const colRef = collection(db, "users", userId, collectionName);
+  // Updated Subscribe to use businessId
+  subscribe: (businessId: string, collectionName: string, callback: (data: any[]) => void) => {
+    const colRef = collection(db, "users", businessId, collectionName);
     return onSnapshot(colRef, (snapshot) => {
       const data = snapshot.docs.map(doc => ({
         id: doc.id,
@@ -76,18 +120,18 @@ export const FirebaseService = {
     });
   },
 
-  createSaleBatch: async (userId: string, invoice: Invoice, products: Product[], party: Party | undefined) => {
+  createSaleBatch: async (businessId: string, invoice: Invoice, products: Product[], party: Party | undefined) => {
     const batch = writeBatch(db);
 
     // 1. Save Invoice
-    const invRef = doc(db, "users", userId, "invoices", invoice.id);
+    const invRef = doc(db, "users", businessId, "invoices", invoice.id);
     batch.set(invRef, invoice);
 
     // 2. Update Stock
     invoice.items.forEach(item => {
       const product = products.find(p => p.id === item.productId);
       if (product) {
-        const prodRef = doc(db, "users", userId, "products", product.id);
+        const prodRef = doc(db, "users", businessId, "products", product.id);
         const newStock = product.stock - item.quantity;
         batch.update(prodRef, { stock: newStock });
       }
@@ -95,13 +139,13 @@ export const FirebaseService = {
 
     // 3. Update Party Balance
     if ((invoice.status === 'Pending' || invoice.status === 'Overdue') && party) {
-      const partyRef = doc(db, "users", userId, "parties", party.id);
+      const partyRef = doc(db, "users", businessId, "parties", party.id);
       const newBalance = (party.balance || 0) + invoice.total;
       batch.update(partyRef, { balance: newBalance });
     }
 
     // 4. Log Transaction
-    const txnRef = doc(db, "users", userId, "transactions", invoice.id);
+    const txnRef = doc(db, "users", businessId, "transactions", invoice.id);
     const newTxn: Transaction = {
       id: invoice.id,
       date: invoice.date,
@@ -116,21 +160,21 @@ export const FirebaseService = {
     await batch.commit();
   },
 
-  updateInvoiceStatus: async (userId: string, invoice: Invoice, newStatus: 'Paid' | 'Pending', parties: Party[]) => {
+  updateInvoiceStatus: async (businessId: string, invoice: Invoice, newStatus: 'Paid' | 'Pending', parties: Party[]) => {
     const batch = writeBatch(db);
     
     // 1. Update Invoice Status
-    const invRef = doc(db, "users", userId, "invoices", invoice.id);
+    const invRef = doc(db, "users", businessId, "invoices", invoice.id);
     batch.update(invRef, { status: newStatus });
 
     // 2. Update Transaction Status
-    const txnRef = doc(db, "users", userId, "transactions", invoice.id);
+    const txnRef = doc(db, "users", businessId, "transactions", invoice.id);
     batch.update(txnRef, { status: newStatus === 'Paid' ? 'Paid' : 'Unpaid' });
 
     // 3. Adjust Party Balance Logic
     const party = parties.find(p => p.name === invoice.customerName);
     if (party) {
-       const partyRef = doc(db, "users", userId, "parties", party.id);
+       const partyRef = doc(db, "users", businessId, "parties", party.id);
        if (invoice.status === 'Pending' && newStatus === 'Paid') {
           batch.update(partyRef, { balance: increment(-invoice.total) });
        } else if (invoice.status === 'Paid' && newStatus === 'Pending') {
@@ -141,11 +185,11 @@ export const FirebaseService = {
     await batch.commit();
   },
 
-  createPurchaseBatch: async (userId: string, purchase: Purchase, products: Product[], party: Party | undefined) => {
+  createPurchaseBatch: async (businessId: string, purchase: Purchase, products: Product[], party: Party | undefined) => {
     const batch = writeBatch(db);
 
     // 1. Save Purchase
-    const purRef = doc(db, "users", userId, "purchases", purchase.id);
+    const purRef = doc(db, "users", businessId, "purchases", purchase.id);
     batch.set(purRef, purchase);
 
     // 2. Update Stock or Create New Products
@@ -153,12 +197,12 @@ export const FirebaseService = {
       if (item.productId) {
         const product = products.find(p => p.id === item.productId);
         if (product) {
-          const prodRef = doc(db, "users", userId, "products", product.id);
+          const prodRef = doc(db, "users", businessId, "products", product.id);
           batch.update(prodRef, { stock: product.stock + item.qty });
         }
       } else {
         const newId = Date.now().toString() + Math.random().toString().slice(2,5);
-        const newProdRef = doc(db, "users", userId, "products", newId);
+        const newProdRef = doc(db, "users", businessId, "products", newId);
         batch.set(newProdRef, {
           id: newId,
           name: item.name,
@@ -173,13 +217,13 @@ export const FirebaseService = {
 
     // 3. Update Party Balance
     if (purchase.status === 'Unpaid' && party) {
-      const partyRef = doc(db, "users", userId, "parties", party.id);
+      const partyRef = doc(db, "users", businessId, "parties", party.id);
       const newBalance = (party.balance || 0) - purchase.amount;
       batch.update(partyRef, { balance: newBalance });
     }
 
     // 4. Log Transaction
-    const txnRef = doc(db, "users", userId, "transactions", purchase.id);
+    const txnRef = doc(db, "users", businessId, "transactions", purchase.id);
     const newTxn: Transaction = {
       id: purchase.id,
       date: purchase.date,
@@ -194,21 +238,21 @@ export const FirebaseService = {
     await batch.commit();
   },
 
-  updatePurchaseStatus: async (userId: string, purchase: Purchase, newStatus: 'Paid' | 'Unpaid', parties: Party[]) => {
+  updatePurchaseStatus: async (businessId: string, purchase: Purchase, newStatus: 'Paid' | 'Unpaid', parties: Party[]) => {
     const batch = writeBatch(db);
     
     // 1. Update Purchase Status
-    const purRef = doc(db, "users", userId, "purchases", purchase.id);
+    const purRef = doc(db, "users", businessId, "purchases", purchase.id);
     batch.update(purRef, { status: newStatus, unpaidAmount: newStatus === 'Paid' ? 0 : purchase.amount });
 
     // 2. Update Transaction Status
-    const txnRef = doc(db, "users", userId, "transactions", purchase.id);
+    const txnRef = doc(db, "users", businessId, "transactions", purchase.id);
     batch.update(txnRef, { status: newStatus === 'Paid' ? 'Paid' : 'Unpaid' });
 
     // 3. Adjust Party Balance Logic
     const party = parties.find(p => p.name === purchase.partyName);
     if (party) {
-       const partyRef = doc(db, "users", userId, "parties", party.id);
+       const partyRef = doc(db, "users", businessId, "parties", party.id);
        if (purchase.status === 'Unpaid' && newStatus === 'Paid') {
           batch.update(partyRef, { balance: increment(purchase.amount) });
        } else if (purchase.status === 'Paid' && newStatus === 'Unpaid') {
@@ -219,15 +263,15 @@ export const FirebaseService = {
     await batch.commit();
   },
 
-  addExpense: async (userId: string, expense: Expense) => {
+  addExpense: async (businessId: string, expense: Expense) => {
     const batch = writeBatch(db);
 
     // 1. Save Expense
-    const expRef = doc(db, "users", userId, "expenses", expense.id);
+    const expRef = doc(db, "users", businessId, "expenses", expense.id);
     batch.set(expRef, expense);
 
     // 2. Log Transaction
-    const txnRef = doc(db, "users", userId, "transactions", expense.id);
+    const txnRef = doc(db, "users", businessId, "transactions", expense.id);
     const newTxn: Transaction = {
       id: expense.id,
       date: expense.date,
@@ -242,13 +286,13 @@ export const FirebaseService = {
     await batch.commit();
   },
 
-  add: async (userId: string, collectionName: string, data: any) => {
-    const ref = doc(db, "users", userId, collectionName, data.id);
+  add: async (businessId: string, collectionName: string, data: any) => {
+    const ref = doc(db, "users", businessId, collectionName, data.id);
     await setDoc(ref, data);
   },
 
-  update: async (userId: string, collectionName: string, data: any) => {
-    const ref = doc(db, "users", userId, collectionName, data.id);
+  update: async (businessId: string, collectionName: string, data: any) => {
+    const ref = doc(db, "users", businessId, collectionName, data.id);
     await setDoc(ref, data, { merge: true });
   }
 };

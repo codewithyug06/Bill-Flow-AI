@@ -6,6 +6,7 @@ import {
   BarChart3, Wallet, Settings, ChevronDown, Plus, 
   Sparkles, FileText, X
 } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 
 interface SidebarProps {
   currentView: ViewState;
@@ -13,9 +14,10 @@ interface SidebarProps {
   onOpenAssistant: () => void;
   isOpen: boolean;
   onClose: () => void;
+  userRole?: 'owner' | 'staff';
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, onOpenAssistant, isOpen, onClose }) => {
+export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, onOpenAssistant, isOpen, onClose, userRole = 'owner' }) => {
   
   const NavItem = ({ id, label, icon: Icon, hasSub = false }: { id: ViewState, label: string, icon: any, hasSub?: boolean }) => (
     <button
@@ -43,7 +45,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, o
       `}>
         {/* Header */}
         <div className="p-4 bg-teal-950 flex justify-between items-center border-b border-slate-800">
-           <div className="flex items-center gap-2 text-white">
+           <div className="flex items-center gap-3 text-white">
+              <BrandLogo className="w-8 h-8" variant="white" />
               <span className="font-bold text-lg tracking-wide">Menu</span>
            </div>
            <button onClick={onClose} className="text-slate-400 hover:text-white p-1 rounded-md hover:bg-slate-800">
@@ -73,6 +76,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, o
           <NavItem id="items" label="Inventory" icon={Package} hasSub />
           <NavItem id="sales" label="Sales" icon={ShoppingBag} hasSub />
           <NavItem id="purchases" label="Purchases" icon={ShoppingCart} hasSub />
+          
+          {/* Reports visible to Owner only */}
           <NavItem id="reports" label="Reports" icon={BarChart3} />
 
           <div className="px-5 py-2 mt-6 text-[11px] font-bold text-slate-500 uppercase tracking-widest">Accounting</div>
@@ -94,20 +99,22 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, o
           <NavItem id="dummy-invoice" label="Dummy Invoice" icon={FileText} />
         </div>
 
-        {/* Bottom Settings */}
-        <div className="bg-[#0b1120] border-t border-slate-800">
-          <button 
-            onClick={() => setCurrentView('settings')}
-            className={`w-full flex items-center gap-3 px-5 py-4 text-sm transition-colors border-l-4 ${
-              currentView === 'settings' 
-                ? 'bg-slate-800 text-teal-400 border-teal-400' 
-                : 'text-slate-400 hover:text-white border-transparent'
-            }`}
-          >
-            <Settings className="w-4 h-4" />
-            <span>Settings</span>
-          </button>
-        </div>
+        {/* Bottom Settings - Hidden for Staff */}
+        {userRole === 'owner' && (
+          <div className="bg-[#0b1120] border-t border-slate-800">
+            <button 
+              onClick={() => setCurrentView('settings')}
+              className={`w-full flex items-center gap-3 px-5 py-4 text-sm transition-colors border-l-4 ${
+                currentView === 'settings' 
+                  ? 'bg-slate-800 text-teal-400 border-teal-400' 
+                  : 'text-slate-400 hover:text-white border-transparent'
+              }`}
+            >
+              <Settings className="w-4 h-4" />
+              <span>Settings</span>
+            </button>
+          </div>
+        )}
       </aside>
     </>
   );

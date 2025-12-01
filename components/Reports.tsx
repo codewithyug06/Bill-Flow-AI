@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo } from 'react';
-import { BarChart3, Download, Calendar, Sparkles, TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
+import { BarChart3, Download, Calendar, Sparkles, TrendingUp, TrendingDown, ArrowRight, ChevronDown } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { GeminiService } from '../services/geminiService';
 import { Invoice, Purchase } from '../types';
@@ -14,14 +14,15 @@ export const Reports: React.FC<ReportsProps> = ({ invoices, purchases }) => {
   const [activeTab, setActiveTab] = useState<'sales' | 'gst' | 'stock'>('sales');
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
+  const [year, setYear] = useState(new Date().getFullYear());
+  const [showYearMenu, setShowYearMenu] = useState(false);
 
   // --- Dynamic Data Calculation ---
   const { chartData, totalSales, totalPurchases, netProfit } = useMemo(() => {
     const data: { name: string; sales: number; purchase: number }[] = [];
     const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     
-    // Initialize current year months
-    const currentYear = new Date().getFullYear();
+    // Initialize months
     for (let i = 0; i < 12; i++) {
       data.push({ name: monthNames[i], sales: 0, purchase: 0 });
     }
@@ -31,7 +32,7 @@ export const Reports: React.FC<ReportsProps> = ({ invoices, purchases }) => {
 
     invoices.forEach(inv => {
       const d = new Date(inv.date);
-      if (d.getFullYear() === currentYear) {
+      if (d.getFullYear() === year) {
         data[d.getMonth()].sales += inv.total;
         tSales += inv.total;
       }
@@ -39,15 +40,17 @@ export const Reports: React.FC<ReportsProps> = ({ invoices, purchases }) => {
 
     purchases.forEach(pur => {
       const d = new Date(pur.date);
-      if (d.getFullYear() === currentYear) {
+      if (d.getFullYear() === year) {
         data[d.getMonth()].purchase += pur.amount;
         tPurchases += pur.amount;
       }
     });
 
-    // Filter to show only up to current month or months with data
+    // If it's the current year, filter to show only up to current month (optional, keeps chart clean)
+    // If it's a past year, show all 12 months
+    const isCurrentYear = year === new Date().getFullYear();
     const currentMonthIndex = new Date().getMonth();
-    const filteredData = data.slice(0, currentMonthIndex + 1);
+    const filteredData = isCurrentYear ? data.slice(0, currentMonthIndex + 1) : data;
 
     return { 
       chartData: filteredData, 
@@ -55,14 +58,14 @@ export const Reports: React.FC<ReportsProps> = ({ invoices, purchases }) => {
       totalPurchases: tPurchases,
       netProfit: tSales - tPurchases
     };
-  }, [invoices, purchases]);
+  }, [invoices, purchases, year]);
 
   const handleAnalyze = async () => {
     setAnalyzing(true);
     let dataContext = '';
     
     if (activeTab === 'sales') {
-       dataContext = `Sales vs Purchase Summary for ${new Date().getFullYear()}. 
+       dataContext = `Sales vs Purchase Summary for ${year}. 
        Total Sales: ${totalSales}. Total Purchase: ${totalPurchases}. Net Profit: ${netProfit}.
        Monthly Breakdown: ${JSON.stringify(chartData.map(d => `${d.name}: Sales ${d.sales}, Purch ${d.purchase}`))}`;
     } else {
@@ -74,19 +77,68 @@ export const Reports: React.FC<ReportsProps> = ({ invoices, purchases }) => {
     setAnalyzing(false);
   };
 
+  const handleExport = () => {
+    // 1. Define Headers
+    const headers = ['Month', 'Sales', 'Purchases', 'Net Difference'];
+    
+    // 2. Map Data
+    const csvRows = chartData.map(row => [
+       row.name,
+       row.sales.toFixed(2),
+       row.purchase.toFixed(2),
+       (row.sales - row.purchase).toFixed(2)
+    ]);
+    
+    // 3. Add Summary Row
+    csvRows.push([]);
+    csvRows.push(['TOTAL', totalSales.toFixed(2), totalPurchases.toFixed(2), netProfit.toFixed(2)]);
+
+    // 4. Convert to CSV String
+    const csvContent = [
+       headers.join(','),
+       ...csvRows.map(e => e.join(','))
+    ].join('\n');
+
+    // 5. Trigger Download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `financial_report_${year}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
            <h1 className="text-2xl font-bold text-gray-800">Analytics & Reports</h1>
-           <p className="text-gray-500 text-sm">Real-time financial insights for {new Date().getFullYear()}</p>
+           <p className="text-gray-500 text-sm">Real-time financial insights for {year}</p>
         </div>
-        <div className="flex gap-2">
-           <button className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-medium shadow-sm transition-all">
-             <Calendar className="w-4 h-4" /> This Year
-           </button>
-           <button className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium shadow-sm transition-all">
-             <Download className="w-4 h-4" /> Export
+        <div className="flex gap-2 relative">
+           <div className="relative">
+             <button 
+               onClick={() => setShowYearMenu(!showYearMenu)}
+               className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white rounded-lg text-gray-600 hover:bg-gray-50 text-sm font-medium shadow-sm transition-all"
+             >
+               <Calendar className="w-4 h-4" /> {year} <ChevronDown className="w-3 h-3 opacity-50" />
+             </button>
+             {showYearMenu && (
+               <div className="absolute top-full mt-1 right-0 bg-white border border-gray-100 shadow-lg rounded-lg py-1 z-20 min-w-[120px]">
+                 <button onClick={() => { setYear(new Date().getFullYear()); setShowYearMenu(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50">This Year ({new Date().getFullYear()})</button>
+                 <button onClick={() => { setYear(new Date().getFullYear() - 1); setShowYearMenu(false); }} className="w-full text-left px-4 py-2 text-sm hover:bg-gray-50">Last Year ({new Date().getFullYear() - 1})</button>
+               </div>
+             )}
+           </div>
+
+           <button 
+             onClick={handleExport}
+             className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 text-sm font-medium shadow-sm transition-all"
+           >
+             <Download className="w-4 h-4" /> Export CSV
            </button>
         </div>
       </header>

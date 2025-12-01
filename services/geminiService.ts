@@ -1,10 +1,8 @@
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 // Initialize Gemini AI Client
-// NOTE: In a real app, ensure API_KEY is defined in your environment variables.
-// We use a safe check for process to avoid ReferenceError in browser-only environments.
-const apiKey = (typeof process !== 'undefined' && process.env && process.env.API_KEY) || '';
-const ai = new GoogleGenAI({ apiKey });
+// The API key must be obtained exclusively from the environment variable process.env.API_KEY
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const MODEL_FAST = 'gemini-2.5-flash';
 const MODEL_REASONING = 'gemini-3-pro-preview';
@@ -12,6 +10,7 @@ const MODEL_REASONING = 'gemini-3-pro-preview';
 export const GeminiService = {
   /**
    * Generates a product description based on name and category.
+   * Uses Flash model for speed.
    */
   generateProductDescription: async (name: string, category: string): Promise<string> => {
     try {
@@ -31,6 +30,7 @@ export const GeminiService = {
 
   /**
    * Analyzes sales data to provide business insights.
+   * Uses Pro model for complex reasoning.
    */
   analyzeBusinessData: async (summaryContext: string): Promise<string> => {
     try {
@@ -51,7 +51,8 @@ export const GeminiService = {
   },
 
   /**
-   * Auto-categorizes expenses based on description
+   * Auto-categorizes expenses based on description.
+   * Uses Flash model.
    */
   suggestExpenseCategory: async (description: string): Promise<string> => {
     try {
@@ -67,7 +68,8 @@ export const GeminiService = {
   },
 
   /**
-   * Analyzes a financial report
+   * Analyzes a financial report.
+   * Uses Pro model for detailed analysis.
    */
   analyzeReport: async (reportData: string, reportType: string): Promise<string> => {
     try {
@@ -85,19 +87,27 @@ export const GeminiService = {
   },
 
   /**
-   * Chat with data helper
+   * Chat with data helper.
+   * Uses Flash model for responsive chat.
    */
   askAssistant: async (history: {role: string, text: string}[], question: string, contextData: string): Promise<string> => {
     try {
+      // Construct the conversation history including the system context
       const contents = [
-        { role: 'user', parts: [{ text: `System Context: You are a helpful billing assistant. Use this data to answer: ${contextData}` }] },
-        ...history.map(h => ({ role: h.role === 'ai' ? 'model' : 'user', parts: [{ text: h.text }] })),
+        { 
+          role: 'user', 
+          parts: [{ text: `System Context: You are a helpful billing assistant. Use this business data to answer the user's questions accurately: ${contextData}` }] 
+        },
+        ...history.map(h => ({ 
+          role: h.role === 'ai' ? 'model' : 'user', 
+          parts: [{ text: h.text }] 
+        })),
         { role: 'user', parts: [{ text: question }] }
       ];
 
       const response = await ai.models.generateContent({
         model: MODEL_FAST,
-        contents: contents as any, // Type casting for simplicity in this demo structure
+        contents: contents as any,
       });
       return response.text || "I'm not sure how to answer that.";
     } catch (error) {

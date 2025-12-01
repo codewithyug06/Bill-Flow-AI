@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { Save, User as UserIcon, Building, Phone, CreditCard, MapPin, CheckCircle2 } from 'lucide-react';
+import { Save, User as UserIcon, Building, Phone, CreditCard, MapPin, CheckCircle2, Copy, Users } from 'lucide-react';
 
 interface SettingsProps {
   user: User;
@@ -11,6 +11,7 @@ interface SettingsProps {
 export const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser }) => {
   const [formData, setFormData] = useState<User>(user);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     setFormData(user);
@@ -26,6 +27,12 @@ export const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser }) => {
     setTimeout(() => setShowSuccess(false), 3000);
   };
 
+  const copyBusinessId = () => {
+    navigator.clipboard.writeText(user.id);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in duration-300">
       <header>
@@ -39,6 +46,31 @@ export const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser }) => {
           <span className="font-medium">Settings updated successfully!</span>
         </div>
       )}
+
+      {/* Staff Invitation Card */}
+      <div className="bg-indigo-50 border border-indigo-100 rounded-xl overflow-hidden">
+         <div className="p-4 bg-indigo-100/50 border-b border-indigo-100 flex items-center gap-2">
+            <Users className="w-4 h-4 text-indigo-600" />
+            <h2 className="text-sm font-bold text-indigo-800 uppercase tracking-wide">Multi-User Access</h2>
+         </div>
+         <div className="p-6">
+            <p className="text-sm text-gray-700 mb-4">
+              To add staff to your business, ask them to select <strong>"Join as Staff"</strong> during sign up and enter this Business Code:
+            </p>
+            <div className="flex items-center gap-2 bg-white p-3 rounded-lg border border-indigo-200">
+               <code className="flex-1 font-mono text-lg font-bold text-indigo-700 tracking-wider text-center select-all">
+                 {user.id}
+               </code>
+               <button 
+                 onClick={copyBusinessId}
+                 className="p-2 hover:bg-indigo-50 rounded-md text-indigo-600 transition-colors"
+                 title="Copy Code"
+               >
+                 {copied ? <CheckCircle2 className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+               </button>
+            </div>
+         </div>
+      </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-100">

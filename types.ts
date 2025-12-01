@@ -87,6 +87,9 @@ export interface User {
   businessName: string;
   gstin?: string;
   address?: string;
+  // Multi-user fields
+  role: 'owner' | 'staff';
+  businessId: string; // If owner, equals id. If staff, equals owner's id.
 }
 
 export interface Notification {

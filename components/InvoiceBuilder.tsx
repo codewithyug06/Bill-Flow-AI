@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { InvoiceItem, Party, Product, User, Invoice } from '../types';
-import { Plus, Trash2, FileText, Printer, Send, ChevronLeft, CheckCircle2, Download, Search, Calendar, Eye, ArrowUpRight, ArrowDownLeft, Wallet, Filter, ChevronDown, Mail, Loader2, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, FileText, Printer, Send, ChevronLeft, CheckCircle2, Download, Search, Calendar, Eye, ArrowUpRight, ArrowDownLeft, Wallet, Filter, ChevronDown, Mail, Loader2, RefreshCw, Clock, AlertCircle, MessageCircle } from 'lucide-react';
+import { BrandLogo } from './BrandLogo';
 
 interface InvoiceBuilderProps {
   parties?: Party[];
@@ -167,6 +168,34 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
     }, 1500);
   };
 
+  const handleWhatsAppShare = () => {
+    const inv = selectedInvoice;
+    if (!inv) return;
+
+    let phone = selectedParty?.phone;
+    if (!phone) {
+        const manual = prompt("Enter customer WhatsApp number (e.g. 9876543210):");
+        if (!manual) return;
+        phone = manual;
+    }
+
+    // Format phone: remove non-digits, default to 91 if 10 digits
+    const cleanPhone = phone.replace(/\D/g, '');
+    const finalPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+
+    const businessName = user?.businessName || 'Our Business';
+    const message = `*INVOICE: ${inv.invoiceNo}*\n\n` +
+      `Hello ${inv.customerName},\n` +
+      `Please find your invoice details below:\n\n` +
+      `📅 Date: ${inv.date}\n` +
+      `📦 Items: ${inv.items.length}\n` +
+      `💰 *Total Amount: ₹ ${inv.total.toFixed(2)}*\n` +
+      `Status: ${inv.status}\n\n` +
+      `Regards,\n${businessName}`;
+
+    window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`, '_blank');
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -307,13 +336,31 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                            <td className="px-6 py-4 text-center">
                               <button 
                                 onClick={() => toggleStatus(inv)}
-                                className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-1 mx-auto transition-all ${
+                                className={`px-3 py-1.5 rounded-full text-xs font-bold border flex items-center justify-center gap-1.5 mx-auto transition-all w-28 shadow-sm ${
                                   inv.status === 'Paid' 
-                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200' 
-                                  : 'bg-orange-100 text-orange-600 border-orange-200 hover:bg-orange-200'
-                              }`}>
-                                  {inv.status}
-                                  <RefreshCw className="w-3 h-3 opacity-50" />
+                                  ? 'bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-emerald-200 hover:border-emerald-300' 
+                                  : inv.status === 'Overdue'
+                                    ? 'bg-red-100 text-red-700 border-red-200 hover:bg-red-200 hover:border-red-300'
+                                    : 'bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-200 hover:border-amber-300'
+                                }`}
+                                title="Click to toggle status"
+                              >
+                                  {inv.status === 'Paid' ? (
+                                    <>
+                                      <CheckCircle2 className="w-3.5 h-3.5" />
+                                      <span>Paid</span>
+                                    </>
+                                  ) : inv.status === 'Overdue' ? (
+                                    <>
+                                      <AlertCircle className="w-3.5 h-3.5" />
+                                      <span>Overdue</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Clock className="w-3.5 h-3.5" />
+                                      <span>Pending</span>
+                                    </>
+                                  )}
                               </button>
                            </td>
                            <td className="px-4 py-4 text-center">
@@ -381,6 +428,13 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
              </button>
            ) : (
              <div className="flex gap-2">
+               <button 
+                  onClick={handleWhatsAppShare}
+                  className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 font-medium transition-colors shadow-sm"
+                  title="Share on WhatsApp"
+               >
+                  <MessageCircle className="w-4 h-4" /> WhatsApp
+               </button>
                <button 
                   onClick={handlePrint}
                   className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors shadow-sm"
@@ -590,8 +644,8 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                     </div>
                  </div>
                  <div className="text-right">
-                    <div className="w-24 h-24 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400 border border-gray-200 mb-4 ml-auto">
-                       <span className="text-xs">Logo</span>
+                    <div className="w-24 h-24 bg-gray-50 rounded-lg flex items-center justify-center text-gray-400 border border-gray-200 mb-4 ml-auto">
+                       <BrandLogo className="w-16 h-16" variant="color" />
                     </div>
                  </div>
               </div>
