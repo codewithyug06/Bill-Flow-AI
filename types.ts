@@ -7,6 +7,7 @@ export interface Product {
   stock: number;
   unit: string;
   description?: string;
+  barcode?: string;
 }
 
 export interface InvoiceItem {
@@ -28,6 +29,19 @@ export interface Invoice {
   taxRate?: number;
   total: number;
   status: 'Paid' | 'Pending' | 'Overdue';
+}
+
+export interface Estimate {
+  id: string;
+  estimateNo: string;
+  date: string;
+  customerName: string;
+  items: InvoiceItem[];
+  subtotal: number;
+  tax: number;
+  total: number;
+  status: 'Draft' | 'Sent' | 'Accepted' | 'Rejected';
+  validUntil?: string;
 }
 
 export interface PurchaseItem {
@@ -90,6 +104,7 @@ export interface User {
   // Multi-user fields
   role: 'owner' | 'staff';
   businessId: string; // If owner, equals id. If staff, equals owner's id.
+  lastActive?: string; // ISO Timestamp
 }
 
 export interface Notification {
@@ -101,7 +116,7 @@ export interface Notification {
   type: 'success' | 'alert' | 'info';
 }
 
-export type ViewState = 'dashboard' | 'parties' | 'items' | 'sales' | 'purchases' | 'reports' | 'expenses' | 'settings' | 'dummy-invoice';
+export type ViewState = 'dashboard' | 'parties' | 'items' | 'sales' | 'estimates' | 'purchases' | 'reports' | 'expenses' | 'settings' | 'dummy-invoice';
 
 export interface Insight {
   title: string;

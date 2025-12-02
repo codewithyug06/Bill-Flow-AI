@@ -11,8 +11,9 @@ import { Reports } from './components/Reports';
 import { Expenses } from './components/Expenses';
 import { DummyInvoiceBuilder } from './components/DummyInvoiceBuilder';
 import { PurchaseInvoices } from './components/PurchaseInvoices';
+import { Estimates } from './components/Estimates';
 import { Settings } from './components/Settings';
-import { ViewState, User, Product, Party, Invoice, Purchase, Expense, Transaction, Notification } from './types';
+import { ViewState, User, Product, Party, Invoice, Purchase, Expense, Transaction, Notification, Estimate } from './types';
 import { PersistenceService } from './services/persistence';
 import { FirebaseService } from './services/firebase';
 import { Menu, Bell, X, Check, AlertCircle, LogOut, Settings as SettingsIcon, ChevronDown, Loader2, CloudOff, Building, Users } from 'lucide-react';
@@ -34,7 +35,11 @@ const App: React.FC = () => {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [estimates, setEstimates] = useState<Estimate[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  // State to hold estimate data when converting to invoice
+  const [draftInvoiceData, setDraftInvoiceData] = useState<Partial<Invoice> | null>(null);
 
   // Derived Business ID: If Owner, it's my ID. If Staff, it's my boss's ID.
   const activeBusinessId = user?.businessId || user?.id;
@@ -52,6 +57,8 @@ const App: React.FC = () => {
           ...storedUser 
         };
         setUser(updatedUser);
+        // Heartbeat: Update Last Active
+        FirebaseService.updateLastActive(updatedUser.id);
       }
       setIsAppLoading(false);
     };
@@ -69,6 +76,7 @@ const App: React.FC = () => {
     const unsubPurchases = FirebaseService.subscribe(activeBusinessId, 'purchases', (data) => setPurchases(data));
     const unsubExpenses = FirebaseService.subscribe(activeBusinessId, 'expenses', (data) => setExpenses(data));
     const unsubTransactions = FirebaseService.subscribe(activeBusinessId, 'transactions', (data) => setTransactions(data));
+    const unsubEstimates = FirebaseService.subscribe(activeBusinessId, 'estimates', (data) => setEstimates(data));
 
     return () => {
       // Cleanup listeners on logout
@@ -78,6 +86,7 @@ const App: React.FC = () => {
       unsubPurchases();
       unsubExpenses();
       unsubTransactions();
+      unsubEstimates();
     };
   }, [user, activeBusinessId]);
 
@@ -152,6 +161,36 @@ const App: React.FC = () => {
       addNotification('Error', 'Failed to save expense.', 'alert');
     }
   };
+  
+  // Estimates Handlers
+  const handleCreateEstimate = async (estimate: Estimate) => {
+    if (!user || !activeBusinessId) return;
+    await FirebaseService.saveEstimate(activeBusinessId, estimate);
+    addNotification('Estimate Saved', `Quote ${estimate.estimateNo} created.`, 'info');
+  };
+
+  const handleDeleteEstimate = async (id: string) => {
+    if (!user || !activeBusinessId) return;
+    if (confirm('Are you sure you want to delete this estimate?')) {
+        await FirebaseService.deleteEstimate(activeBusinessId, id);
+        addNotification('Deleted', 'Estimate removed.', 'info');
+    }
+  };
+
+  const handleConvertEstimate = (estimate: Estimate) => {
+     // Prepare data for Invoice Builder
+     setDraftInvoiceData({
+        customerName: estimate.customerName,
+        items: estimate.items,
+        taxRate: 18, // Default or can be part of estimate if added to type
+     });
+     // Switch view
+     setCurrentView('sales');
+     // Optional: Mark estimate as Accepted
+     if(user && activeBusinessId) {
+        FirebaseService.saveEstimate(activeBusinessId, { ...estimate, status: 'Accepted' });
+     }
+  };
 
   const handleAddProductDirect = async (product: Product) => {
      if(!user || !activeBusinessId) return;
@@ -192,6 +231,8 @@ const App: React.FC = () => {
   const handleNavigation = (view: ViewState) => {
     setCurrentView(view);
     setIsSidebarOpen(false);
+    // Clear draft if leaving sales
+    if (view !== 'sales') setDraftInvoiceData(null);
   };
 
   // Loading Screen
@@ -230,6 +271,16 @@ const App: React.FC = () => {
           onSaveInvoice={handleCreateSale}
           onUpdateStatus={handleUpdateSaleStatus}
           user={user}
+          initialData={draftInvoiceData}
+        />;
+      case 'estimates':
+        return <Estimates 
+           estimates={estimates}
+           products={products}
+           parties={parties}
+           onSaveEstimate={handleCreateEstimate}
+           onConvert={handleConvertEstimate}
+           onDelete={handleDeleteEstimate}
         />;
       case 'items':
         return <InventoryManager 
@@ -306,7 +357,7 @@ const App: React.FC = () => {
               >
                  <BrandLogo className="w-8 h-8" variant="white" />
                  <div className="hidden md:block">
-                   <h1 className="font-bold text-lg tracking-tight leading-none">BillFlow AI</h1>
+                   <h1 className="font-bold text-lg tracking-tight leading-none">BillNexa</h1>
                    {user.role === 'staff' && <span className="text-[10px] text-teal-300 font-medium tracking-wide">STAFF MODE</span>}
                  </div>
               </button>

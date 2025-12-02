@@ -17,8 +17,9 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
   // Form State
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [businessName, setBusinessName] = useState('');
-  const [ownerName, setOwnerName] = useState('');
+  const [ownerName, setOwnerName] = useState(''); // Used for Staff Name as well
   const [phone, setPhone] = useState('');
   
   // Staff Logic
@@ -31,38 +32,79 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
 
     try {
-      if (isLoginMode) {
-        // Sign In
-        const user = await FirebaseService.loginUser(email, password);
-        onLogin(user);
-      } else {
-        // Sign Up
-        if (role === 'owner' && (!businessName || !ownerName)) {
-          throw new Error("Business details are required.");
+      if (role === 'staff') {
+        // --- STAFF LOGIC (Synthetic Auth) ---
+        if (!ownerName || !businessCode) {
+           throw new Error("Name and Business Code are required.");
         }
-        if (role === 'staff' && (!ownerName || !businessCode)) {
-          throw new Error("Staff name and Business Code are required.");
+        
+        // Generate deterministic credentials
+        const sanitizedName = ownerName.toLowerCase().replace(/[^a-z0-9]/g, '');
+        const sanitizedCode = businessCode.trim();
+        const syntheticEmail = `staff.${sanitizedCode}.${sanitizedName}@billnexa.internal`;
+        const syntheticPass = `staff-${sanitizedCode}-${sanitizedName}-secure`;
+
+        try {
+           // Try Login First
+           const user = await FirebaseService.loginUser(syntheticEmail, syntheticPass);
+           onLogin(user);
+        } catch (loginErr: any) {
+           // If user not found, Register them automatically
+           if (loginErr.code === 'auth/invalid-credential' || loginErr.code === 'auth/user-not-found') {
+              const user = await FirebaseService.registerUser(
+                 syntheticEmail,
+                 syntheticPass,
+                 {
+                    name: ownerName,
+                    businessName: 'Joining...', // Will be resolved by service
+                    phone: '',
+                    gstin: '',
+                    address: ''
+                 },
+                 'staff',
+                 businessCode
+              );
+              onLogin(user);
+           } else {
+              throw loginErr;
+           }
         }
 
-        const user = await FirebaseService.registerUser(
-          email, 
-          password, 
-          {
-            name: ownerName,
-            businessName: role === 'owner' ? businessName : 'Joining...',
-            phone: phone,
-            gstin: '',
-            address: ''
-          },
-          role,
-          businessCode
-        );
-        onLogin(user);
+      } else {
+        // --- OWNER LOGIC (Standard) ---
+        if (isLoginMode) {
+          // Sign In
+          const user = await FirebaseService.loginUser(email, password);
+          onLogin(user);
+        } else {
+          // Sign Up
+          if (!businessName || !ownerName) {
+            throw new Error("Business details are required.");
+          }
+          if (password !== confirmPassword) {
+            throw new Error("Passwords do not match.");
+          }
+
+          const user = await FirebaseService.registerUser(
+            email, 
+            password, 
+            {
+              name: ownerName,
+              businessName: businessName,
+              phone: phone,
+              gstin: '',
+              address: ''
+            },
+            role,
+            // Owner doesn't need businessCode
+          );
+          onLogin(user);
+        }
       }
     } catch (err: any) {
       console.error(err);
       let msg = "Authentication failed. Please try again.";
-      if (err.code === 'auth/invalid-credential') msg = "Invalid email or password.";
+      if (err.code === 'auth/invalid-credential') msg = "Invalid credentials.";
       if (err.code === 'auth/email-already-in-use') msg = "Email already in use. Please login.";
       if (err.code === 'auth/weak-password') msg = "Password should be at least 6 characters.";
       if (err.message) msg = err.message;
@@ -94,7 +136,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                  <BrandLogo className="w-14 h-14" variant="white" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold text-white tracking-tight">BillFlow AI</h1>
+                <h1 className="text-4xl font-bold text-white tracking-tight">BillNexa</h1>
                 <p className="text-teal-400 text-lg font-medium">Smart Business Intelligence</p>
               </div>
            </div>
@@ -139,14 +181,18 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             {/* Mobile Branding */}
             <div className="lg:hidden flex flex-col items-center mb-8">
                <BrandLogo className="w-16 h-16 mb-4" variant="color" />
-               <h1 className="text-3xl font-bold text-white">BillFlow AI</h1>
+               <h1 className="text-3xl font-bold text-white">BillNexa</h1>
             </div>
 
             <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 md:p-10 rounded-3xl shadow-2xl">
                 <div className="text-center mb-8">
-                   <h2 className="text-2xl font-bold text-white mb-2">{isLoginMode ? 'Welcome Back' : 'Create Account'}</h2>
+                   <h2 className="text-2xl font-bold text-white mb-2">
+                      {role === 'staff' ? 'Staff Login' : (isLoginMode ? 'Welcome Back' : 'Create Account')}
+                   </h2>
                    <p className="text-slate-400 text-sm">
-                     {isLoginMode ? 'Enter your credentials to access your dashboard' : 'Join thousands of businesses growing with us'}
+                     {role === 'staff' 
+                       ? 'Enter your name and business code to access' 
+                       : (isLoginMode ? 'Enter your credentials to access your dashboard' : 'Join thousands of businesses growing with us')}
                    </p>
                 </div>
 
@@ -159,60 +205,115 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                    
-                   {!isLoginMode && (
-                     <div className="grid grid-cols-2 gap-2 bg-slate-900/50 p-1.5 rounded-xl border border-white/10">
-                        <button 
-                          type="button"
-                          onClick={() => setRole('owner')} 
-                          className={`py-2 text-sm font-medium rounded-lg transition-all ${role === 'owner' ? 'bg-slate-800 text-teal-400 shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300'}`}
-                        >
-                          Owner
-                        </button>
-                        <button 
-                          type="button"
-                          onClick={() => setRole('staff')} 
-                          className={`py-2 text-sm font-medium rounded-lg transition-all ${role === 'staff' ? 'bg-slate-800 text-teal-400 shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300'}`}
-                        >
-                          Staff
-                        </button>
-                     </div>
-                   )}
+                   {/* Role Toggle */}
+                   <div className="grid grid-cols-2 gap-2 bg-slate-900/50 p-1.5 rounded-xl border border-white/10">
+                      <button 
+                        type="button"
+                        onClick={() => { setRole('owner'); setIsLoginMode(true); setError(null); }} 
+                        className={`py-2 text-sm font-medium rounded-lg transition-all ${role === 'owner' ? 'bg-slate-800 text-teal-400 shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300'}`}
+                      >
+                        Owner
+                      </button>
+                      <button 
+                        type="button"
+                        onClick={() => { setRole('staff'); setError(null); }} 
+                        className={`py-2 text-sm font-medium rounded-lg transition-all ${role === 'staff' ? 'bg-slate-800 text-teal-400 shadow-sm border border-white/10' : 'text-slate-500 hover:text-slate-300'}`}
+                      >
+                        Staff
+                      </button>
+                   </div>
 
-                   {!isLoginMode && (
+                   {/* --- STAFF FIELDS --- */}
+                   {role === 'staff' && (
                      <div className="space-y-5 animate-in slide-in-from-right-4 fade-in">
                         <div className="relative group">
                            <input 
                              type="text" 
                              required
                              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
-                             placeholder={role === 'owner' ? "Owner Name" : "Your Name"}
+                             placeholder="Your Name"
                              value={ownerName}
                              onChange={e => setOwnerName(e.target.value)}
                            />
                            <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
                         </div>
+                        <div className="relative group">
+                           <input 
+                              type="text" 
+                              required
+                              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
+                              placeholder="Business Code (Ask Owner)"
+                              value={businessCode}
+                              onChange={e => setBusinessCode(e.target.value)}
+                           />
+                           <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
+                        </div>
+                     </div>
+                   )}
 
-                        {role === 'owner' ? (
+                   {/* --- OWNER FIELDS --- */}
+                   {role === 'owner' && (
+                     <div className="space-y-5 animate-in slide-in-from-left-4 fade-in">
+                        {!isLoginMode && (
+                           <>
+                              <div className="relative group">
+                                 <input 
+                                    type="text" 
+                                    required
+                                    className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
+                                    placeholder="Owner Name"
+                                    value={ownerName}
+                                    onChange={e => setOwnerName(e.target.value)}
+                                 />
+                                 <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
+                              </div>
+                              <div className="relative group">
+                                 <input 
+                                    type="text" 
+                                    required
+                                    className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
+                                    placeholder="Business Name"
+                                    value={businessName}
+                                    onChange={e => setBusinessName(e.target.value)}
+                                 />
+                                 <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
+                              </div>
+                           </>
+                        )}
+
+                        <div className="relative group">
+                           <input 
+                              type="email" 
+                              required
+                              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
+                              placeholder="Email Address"
+                              value={email}
+                              onChange={e => setEmail(e.target.value)}
+                           />
+                           <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
+                        </div>
+
+                        <div className="relative group">
+                           <input 
+                              type="password" 
+                              required
+                              className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
+                              placeholder="Password"
+                              value={password}
+                              onChange={e => setPassword(e.target.value)}
+                           />
+                           <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
+                        </div>
+
+                        {!isLoginMode && (
                            <div className="relative group">
                               <input 
-                                 type="text" 
+                                 type="password" 
                                  required
                                  className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
-                                 placeholder="Business Name"
-                                 value={businessName}
-                                 onChange={e => setBusinessName(e.target.value)}
-                              />
-                              <Building className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
-                           </div>
-                        ) : (
-                           <div className="relative group">
-                              <input 
-                                 type="text" 
-                                 required
-                                 className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
-                                 placeholder="Business Code (Ask Owner)"
-                                 value={businessCode}
-                                 onChange={e => setBusinessCode(e.target.value)}
+                                 placeholder="Confirm Password"
+                                 value={confirmPassword}
+                                 onChange={e => setConfirmPassword(e.target.value)}
                               />
                               <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
                            </div>
@@ -220,51 +321,29 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                      </div>
                    )}
 
-                   <div className="relative group">
-                      <input 
-                        type="email" 
-                        required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
-                        placeholder="Email Address"
-                        value={email}
-                        onChange={e => setEmail(e.target.value)}
-                      />
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
-                   </div>
-
-                   <div className="relative group">
-                      <input 
-                        type="password" 
-                        required
-                        className="w-full pl-11 pr-4 py-3 bg-slate-900/50 border border-white/10 rounded-xl focus:border-teal-500 focus:ring-1 focus:ring-teal-500 outline-none text-white placeholder-slate-500 transition-all text-sm"
-                        placeholder="Password"
-                        value={password}
-                        onChange={e => setPassword(e.target.value)}
-                      />
-                      <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-teal-500 transition-colors" />
-                   </div>
-
                    <button 
                      type="submit" 
                      disabled={loading}
                      className="w-full bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-400 hover:to-emerald-500 text-white py-3.5 rounded-xl font-bold shadow-lg shadow-teal-900/20 active:scale-[0.98] transition-all flex items-center justify-center gap-2 mt-2 disabled:opacity-70 disabled:cursor-not-allowed text-sm"
                    >
                      {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <ArrowRight className="w-5 h-5" />}
-                     {isLoginMode ? 'Sign In' : 'Create Account'}
+                     {role === 'staff' ? 'Access Business' : (isLoginMode ? 'Sign In' : 'Create Account')}
                    </button>
                 </form>
 
-                <div className="mt-8 text-center pt-6 border-t border-white/5">
-                   <p className="text-sm text-slate-400">
-                      {isLoginMode ? "Don't have an account?" : "Already have an account?"}
-                      <button 
-                         onClick={() => { setIsLoginMode(!isLoginMode); setError(null); }}
-                         className="ml-2 font-bold text-teal-400 hover:text-teal-300 transition-colors underline decoration-transparent hover:decoration-teal-400"
-                      >
-                         {isLoginMode ? "Sign up" : "Log in"}
-                      </button>
-                   </p>
-                </div>
+                {role === 'owner' && (
+                  <div className="mt-8 text-center pt-6 border-t border-white/5">
+                     <p className="text-sm text-slate-400">
+                        {isLoginMode ? "Don't have an account?" : "Already have an account?"}
+                        <button 
+                           onClick={() => { setIsLoginMode(!isLoginMode); setError(null); }}
+                           className="ml-2 font-bold text-teal-400 hover:text-teal-300 transition-colors underline decoration-transparent hover:decoration-teal-400"
+                        >
+                           {isLoginMode ? "Sign up" : "Log in"}
+                        </button>
+                     </p>
+                  </div>
+                )}
             </div>
          </div>
       </div>

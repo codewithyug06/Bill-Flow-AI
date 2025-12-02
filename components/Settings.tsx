@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { User } from '../types';
-import { Save, User as UserIcon, Building, Phone, CreditCard, MapPin, CheckCircle2, Copy, Users } from 'lucide-react';
+import { Save, User as UserIcon, Building, Phone, CreditCard, MapPin, CheckCircle2, Copy, Users, Clock, Loader2 } from 'lucide-react';
+import { FirebaseService } from '../services/firebase';
 
 interface SettingsProps {
   user: User;
@@ -12,10 +13,22 @@ export const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser }) => {
   const [formData, setFormData] = useState<User>(user);
   const [showSuccess, setShowSuccess] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [staffList, setStaffList] = useState<User[]>([]);
+  const [loadingStaff, setLoadingStaff] = useState(false);
 
   useEffect(() => {
     setFormData(user);
+    if (user.role === 'owner') {
+       fetchStaff();
+    }
   }, [user]);
+
+  const fetchStaff = async () => {
+     setLoadingStaff(true);
+     const staff = await FirebaseService.getStaffMembers(user.id);
+     setStaffList(staff);
+     setLoadingStaff(false);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -31,6 +44,18 @@ export const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser }) => {
     navigator.clipboard.writeText(user.id);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const formatLastActive = (dateString?: string) => {
+    if (!dateString) return 'Never';
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)} mins ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)} hours ago`;
+    return `${Math.floor(diffInSeconds / 86400)} days ago`;
   };
 
   return (
@@ -71,6 +96,43 @@ export const Settings: React.FC<SettingsProps> = ({ user, onUpdateUser }) => {
             </div>
          </div>
       </div>
+
+      {/* Team Activity Section - Owner Only */}
+      {user.role === 'owner' && (
+         <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+             <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                <h2 className="text-sm font-bold text-gray-800 uppercase tracking-wide">Team Activity</h2>
+                <button onClick={fetchStaff} className="text-indigo-600 hover:bg-indigo-50 p-1.5 rounded-full transition-colors"><Clock className="w-4 h-4" /></button>
+             </div>
+             <div>
+                {loadingStaff ? (
+                   <div className="p-8 text-center"><Loader2 className="w-6 h-6 animate-spin mx-auto text-indigo-500"/></div>
+                ) : staffList.length > 0 ? (
+                   <div className="divide-y divide-gray-100">
+                      {staffList.map((staff) => (
+                         <div key={staff.id} className="p-4 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                            <div className="flex items-center gap-3">
+                               <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold text-xs">
+                                  {staff.name.substring(0,2).toUpperCase()}
+                               </div>
+                               <div>
+                                  <p className="text-sm font-semibold text-gray-900">{staff.name}</p>
+                                  <p className="text-xs text-gray-500">Staff Member</p>
+                               </div>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                               <span className={`w-2 h-2 rounded-full ${formatLastActive(staff.lastActive) === 'Just now' ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`}></span>
+                               {formatLastActive(staff.lastActive)}
+                            </div>
+                         </div>
+                      ))}
+                   </div>
+                ) : (
+                   <div className="p-6 text-center text-gray-400 text-sm">No staff members have joined yet.</div>
+                )}
+             </div>
+         </div>
+      )}
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-6 border-b border-gray-100">

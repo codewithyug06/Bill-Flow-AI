@@ -4,7 +4,7 @@ import { ViewState } from '../types';
 import { 
   LayoutDashboard, Users, Package, ShoppingBag, ShoppingCart, 
   BarChart3, Wallet, Settings, ChevronDown, Plus, 
-  Sparkles, FileText, X
+  Sparkles, FileText, X, ScrollText
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 
@@ -74,7 +74,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, o
           <NavItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
           <NavItem id="parties" label="Parties" icon={Users} />
           <NavItem id="items" label="Inventory" icon={Package} hasSub />
-          <NavItem id="sales" label="Sales" icon={ShoppingBag} hasSub />
+          
+          <div className="px-5 py-2 mt-6 text-[11px] font-bold text-slate-500 uppercase tracking-widest">Operations</div>
+          <NavItem id="sales" label="Sales Invoices" icon={ShoppingBag} hasSub />
+          <NavItem id="estimates" label="Estimates / Quotes" icon={ScrollText} />
           <NavItem id="purchases" label="Purchases" icon={ShoppingCart} hasSub />
           
           {/* Reports visible to Owner only */}

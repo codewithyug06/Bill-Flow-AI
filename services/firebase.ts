@@ -10,9 +10,13 @@ import {
   updateDoc,
   onSnapshot, 
   writeBatch, 
-  increment 
+  increment,
+  query,
+  where,
+  getDocs,
+  deleteDoc
 } from "firebase/firestore";
-import { Invoice, Purchase, Product, Party, Transaction, Expense, User } from "../types";
+import { Invoice, Purchase, Product, Party, Transaction, Expense, User, Estimate } from "../types";
 
 // --- CONFIGURE YOUR FIREBASE PROJECT HERE ---
 const firebaseConfig = {
@@ -43,6 +47,9 @@ export const FirebaseService = {
     const userDocRef = doc(db, "users", uid);
     const userDoc = await getDoc(userDocRef);
     
+    // Update Last Active
+    await updateDoc(userDocRef, { lastActive: new Date().toISOString() }).catch(e => console.log("Update active fail", e));
+
     if (userDoc.exists()) {
       return { id: uid, ...userDoc.data() } as User;
     } else {
@@ -55,6 +62,15 @@ export const FirebaseService = {
         role: 'owner', 
         businessId: uid 
       };
+    }
+  },
+
+  updateLastActive: async (uid: string) => {
+    try {
+      const userDocRef = doc(db, "users", uid);
+      await updateDoc(userDocRef, { lastActive: new Date().toISOString() });
+    } catch (e) {
+      console.error("Failed to heartbeat", e);
     }
   },
 
@@ -95,7 +111,8 @@ export const FirebaseService = {
       ...profile,
       businessName: finalBusinessName,
       role, 
-      businessId: finalBusinessId 
+      businessId: finalBusinessId,
+      lastActive: new Date().toISOString()
     };
 
     await setDoc(doc(db, "users", uid), newUser);
@@ -104,6 +121,26 @@ export const FirebaseService = {
 
   logoutUser: async () => {
     await signOut(auth);
+  },
+
+  // Fetch all staff members for a specific business
+  getStaffMembers: async (businessId: string): Promise<User[]> => {
+    try {
+      const q = query(
+        collection(db, "users"), 
+        where("businessId", "==", businessId),
+        where("role", "==", "staff")
+      );
+      const querySnapshot = await getDocs(q);
+      const staff: User[] = [];
+      querySnapshot.forEach((doc) => {
+        staff.push({ id: doc.id, ...doc.data() } as User);
+      });
+      return staff;
+    } catch (error) {
+      console.error("Error fetching staff:", error);
+      return [];
+    }
   },
 
   // Updated Subscribe to use businessId
@@ -284,6 +321,17 @@ export const FirebaseService = {
     batch.set(txnRef, newTxn);
 
     await batch.commit();
+  },
+
+  // Estimates / Quotations
+  saveEstimate: async (businessId: string, estimate: Estimate) => {
+    const ref = doc(db, "users", businessId, "estimates", estimate.id);
+    await setDoc(ref, estimate);
+  },
+
+  deleteEstimate: async (businessId: string, estimateId: string) => {
+     const ref = doc(db, "users", businessId, "estimates", estimateId);
+     await deleteDoc(ref);
   },
 
   add: async (businessId: string, collectionName: string, data: any) => {

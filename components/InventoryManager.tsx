@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { Product } from '../types';
-import { Search, Plus, Edit2, Trash2, Sparkles, Loader2 } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, Sparkles, Loader2, ScanBarcode } from 'lucide-react';
 import { GeminiService } from '../services/geminiService';
+import { BarcodeScanner } from './BarcodeScanner';
 
 interface InventoryManagerProps {
   products: Product[];
@@ -10,10 +11,17 @@ interface InventoryManagerProps {
 
 export const InventoryManager: React.FC<InventoryManagerProps> = ({ products, setProducts }) => {
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
   const [newProduct, setNewProduct] = useState<Partial<Product>>({
-    name: '', category: '', price: 0, stock: 0, unit: 'pcs', description: ''
+    name: '', category: '', price: 0, stock: 0, unit: 'pcs', description: '', barcode: ''
   });
   const [aiLoading, setAiLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredProducts = products.filter(p => 
+    p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (p.barcode && p.barcode.includes(searchTerm))
+  );
 
   const handleGenerateDescription = async () => {
     if (!newProduct.name || !newProduct.category) return;
@@ -25,26 +33,54 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ products, se
 
   const handleSaveProduct = () => {
     if (newProduct.name && newProduct.price) {
-      setProducts([...products, { 
-        id: Date.now().toString(),
-        name: newProduct.name!,
-        category: newProduct.category || 'General',
-        price: Number(newProduct.price),
-        stock: Number(newProduct.stock) || 0,
-        unit: newProduct.unit || 'pcs',
-        description: newProduct.description
-      }]);
+      if (newProduct.id) {
+          // Edit Mode
+          setProducts(products.map(p => p.id === newProduct.id ? { ...p, ...newProduct } as Product : p));
+      } else {
+          // Add Mode
+          setProducts([...products, { 
+            id: Date.now().toString(),
+            name: newProduct.name!,
+            category: newProduct.category || 'General',
+            price: Number(newProduct.price),
+            stock: Number(newProduct.stock) || 0,
+            unit: newProduct.unit || 'pcs',
+            description: newProduct.description,
+            barcode: newProduct.barcode
+          }]);
+      }
       setIsModalOpen(false);
-      setNewProduct({ name: '', category: '', price: 0, stock: 0, unit: 'pcs', description: '' });
+      setNewProduct({ name: '', category: '', price: 0, stock: 0, unit: 'pcs', description: '', barcode: '' });
     }
+  };
+
+  const handleEditClick = (product: Product) => {
+    setNewProduct(product);
+    setIsModalOpen(true);
+  };
+
+  const handleDeleteClick = (id: string) => {
+      if (confirm('Delete this product?')) {
+          setProducts(products.filter(p => p.id !== id));
+      }
+  };
+
+  const handleScan = (code: string) => {
+      setNewProduct(prev => ({ ...prev, barcode: code }));
+      setShowScanner(false);
   };
 
   return (
     <div className="space-y-6">
+      {showScanner && <BarcodeScanner onScan={handleScan} onClose={() => setShowScanner(false)} />}
+      
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold text-gray-800">Inventory Management</h1>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={() => {
+            setNewProduct({ name: '', category: '', price: 0, stock: 0, unit: 'pcs', description: '', barcode: '' });
+            setIsModalOpen(true);
+          }}
           className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
         >
           <Plus className="w-4 h-4" /> Add Product
@@ -57,8 +93,10 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ products, se
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input 
               type="text" 
-              placeholder="Search products..." 
+              placeholder="Search by name or barcode..." 
               className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
             />
           </div>
           <div className="flex gap-2">
@@ -75,6 +113,7 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ products, se
             <thead className="bg-gray-50 text-gray-500 text-xs uppercase font-medium">
               <tr>
                 <th className="px-6 py-4">Product Name</th>
+                <th className="px-6 py-4">Barcode</th>
                 <th className="px-6 py-4">Category</th>
                 <th className="px-6 py-4">Stock</th>
                 <th className="px-6 py-4">Price</th>
@@ -82,11 +121,14 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ products, se
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
-              {products.map((product) => (
+              {filteredProducts.map((product) => (
                 <tr key={product.id} className="hover:bg-gray-50 transition-colors">
                   <td className="px-6 py-4">
                     <div className="font-medium text-gray-900">{product.name}</div>
                     <div className="text-xs text-gray-400 truncate max-w-[200px]">{product.description}</div>
+                  </td>
+                  <td className="px-6 py-4 text-xs font-mono text-gray-500">
+                    {product.barcode || '-'}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-600"><span className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-medium">{product.category}</span></td>
                   <td className="px-6 py-4 text-sm text-gray-600">
@@ -98,8 +140,8 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ products, se
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">${product.price.toFixed(2)}</td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex justify-end gap-2">
-                      <button className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500"><Edit2 className="w-4 h-4" /></button>
-                      <button className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-md text-gray-500"><Trash2 className="w-4 h-4" /></button>
+                      <button onClick={() => handleEditClick(product)} className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500"><Edit2 className="w-4 h-4" /></button>
+                      <button onClick={() => handleDeleteClick(product.id)} className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-md text-gray-500"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </td>
                 </tr>
@@ -109,15 +151,35 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ products, se
         </div>
       </div>
 
-      {/* Add Product Modal */}
+      {/* Add/Edit Product Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
-              <h2 className="text-lg font-semibold text-gray-800">Add New Product</h2>
+              <h2 className="text-lg font-semibold text-gray-800">{newProduct.id ? 'Edit Product' : 'Add New Product'}</h2>
               <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600">&times;</button>
             </div>
             <div className="p-6 space-y-4">
+              <div className="space-y-2">
+                 <label className="text-sm font-medium text-gray-700">Barcode / SKU</label>
+                 <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      className="flex-1 border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none font-mono text-sm"
+                      value={newProduct.barcode || ''}
+                      onChange={e => setNewProduct({...newProduct, barcode: e.target.value})}
+                      placeholder="Scan or type..."
+                    />
+                    <button 
+                      onClick={() => setShowScanner(true)}
+                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg border border-gray-200"
+                      title="Scan Barcode"
+                    >
+                      <ScanBarcode className="w-4 h-4" />
+                    </button>
+                 </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700">Product Name</label>

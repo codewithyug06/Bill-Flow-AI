@@ -1,8 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { InvoiceItem, Party, Product, User, Invoice } from '../types';
-import { Plus, Trash2, FileText, Printer, Send, ChevronLeft, CheckCircle2, Download, Search, Calendar, Eye, ArrowUpRight, ArrowDownLeft, Wallet, Filter, ChevronDown, Mail, Loader2, RefreshCw, Clock, AlertCircle, MessageCircle } from 'lucide-react';
+import { Plus, Trash2, FileText, Printer, Send, ChevronLeft, CheckCircle2, Download, Search, Calendar, Eye, ArrowUpRight, ArrowDownLeft, Wallet, Filter, ChevronDown, Mail, Loader2, RefreshCw, Clock, AlertCircle, MessageCircle, ScanBarcode } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
+import { BarcodeScanner } from './BarcodeScanner';
 
 interface InvoiceBuilderProps {
   parties?: Party[];
@@ -11,9 +11,10 @@ interface InvoiceBuilderProps {
   onSaveInvoice: (invoice: Invoice) => void;
   onUpdateStatus?: (invoice: Invoice, newStatus: 'Paid' | 'Pending') => void;
   user?: User | null;
+  initialData?: Partial<Invoice> | null;
 }
 
-export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], products = [], existingInvoices = [], onSaveInvoice, onUpdateStatus, user }) => {
+export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], products = [], existingInvoices = [], onSaveInvoice, onUpdateStatus, user, initialData }) => {
   const [view, setView] = useState<'list' | 'edit' | 'preview'>('list');
   const [customer, setCustomer] = useState('');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -25,6 +26,10 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
   const [paymentStatus, setPaymentStatus] = useState<'Paid' | 'Pending'>('Paid');
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
   
+  // Scanner State
+  const [showScanner, setShowScanner] = useState(false);
+  const [scanMessage, setScanMessage] = useState<string | null>(null);
+
   // Sending State
   const [isSending, setIsSending] = useState(false);
   const [sendSuccess, setSendSuccess] = useState(false);
@@ -32,6 +37,16 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
   // List View State
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | 'Paid' | 'Pending'>('All');
+
+  // Load initial data if provided
+  useEffect(() => {
+    if (initialData) {
+       setView('edit');
+       setCustomer(initialData.customerName || '');
+       setItems(initialData.items || []);
+       setTaxRate(initialData.taxRate || 18);
+    }
+  }, [initialData]);
 
   // Find Selected Party Details
   const selectedParty = parties.find(p => p.name === customer);
@@ -50,7 +65,7 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
 
   const addItem = () => {
     setItems([...items, {
-      productId: '', // Empty initially, will be filled when product is selected
+      productId: '', 
       productName: '',
       quantity: 1,
       price: 0,
@@ -58,11 +73,40 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
     }]);
   };
 
+  const handleScan = (code: string) => {
+    const product = products.find(p => p.barcode === code);
+    if (product) {
+       // Check if item already exists
+       const existingIndex = items.findIndex(i => i.productId === product.id);
+       
+       if (existingIndex >= 0) {
+          // Increment Qty
+          updateItem(existingIndex, 'quantity', items[existingIndex].quantity + 1);
+          setScanMessage(`Updated qty for ${product.name}`);
+       } else {
+          // Add new item
+          const newItem: InvoiceItem = {
+             productId: product.id,
+             productName: product.name,
+             quantity: 1,
+             price: product.price,
+             total: product.price
+          };
+          setItems(prev => [...prev, newItem]);
+          setScanMessage(`Added ${product.name}`);
+       }
+       // Clear message after 2s
+       setTimeout(() => setScanMessage(null), 2000);
+    } else {
+       setScanMessage(`Product not found for code: ${code}`);
+       setTimeout(() => setScanMessage(null), 3000);
+    }
+  };
+
   const updateItem = (index: number, field: keyof InvoiceItem, value: any) => {
     const newItems = [...items];
     
     if (field === 'productName') {
-      // Auto-fill details if product exists
       newItems[index].productName = value;
       const product = products.find(p => p.name === value);
       if (product) {
@@ -90,7 +134,6 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
   const total = subtotal + tax;
 
   const handleStartCreate = () => {
-    // Reset form
     setCustomer('');
     setDate(new Date().toISOString().split('T')[0]);
     setInvoiceNo(`INV-${Date.now().toString().slice(-6)}`);
@@ -145,19 +188,16 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
     const newInvoice = constructInvoice();
     if (!newInvoice) return;
 
-    // Determine Email
     let emailToUse = selectedParty?.email;
     if (!emailToUse) {
        const manualEmail = prompt(`No email found for ${customer}. Please enter email address to send invoice:`);
-       if (!manualEmail) return; // User cancelled
+       if (!manualEmail) return;
        emailToUse = manualEmail;
     }
 
-    // 1. Save
     onSaveInvoice(newInvoice);
     setSelectedInvoice(newInvoice);
     
-    // 2. Simulate Sending
     setIsSending(true);
     setTimeout(() => {
        setIsSending(false);
@@ -171,18 +211,15 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
   const handleWhatsAppShare = () => {
     const inv = selectedInvoice;
     if (!inv) return;
-
+    // ... same whatsapp logic ...
     let phone = selectedParty?.phone;
     if (!phone) {
         const manual = prompt("Enter customer WhatsApp number (e.g. 9876543210):");
         if (!manual) return;
         phone = manual;
     }
-
-    // Format phone: remove non-digits, default to 91 if 10 digits
     const cleanPhone = phone.replace(/\D/g, '');
     const finalPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
-
     const businessName = user?.businessName || 'Our Business';
     const message = `*INVOICE: ${inv.invoiceNo}*\n\n` +
       `Hello ${inv.customerName},\n` +
@@ -192,7 +229,6 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
       `💰 *Total Amount: ₹ ${inv.total.toFixed(2)}*\n` +
       `Status: ${inv.status}\n\n` +
       `Regards,\n${businessName}`;
-
     window.open(`https://wa.me/${finalPhone}?text=${encodeURIComponent(message)}`, '_blank');
   };
 
@@ -202,7 +238,6 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
   
   const handleViewInvoice = (invoice: Invoice) => {
     setSelectedInvoice(invoice);
-    // Reconstruct state for preview (optional if reusing preview component differently)
     setCustomer(invoice.customerName);
     setInvoiceNo(invoice.invoiceNo);
     setDate(invoice.date);
@@ -285,7 +320,6 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                   />
                </div>
                
-               {/* Status Filter */}
                <div className="relative">
                  <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                  <select 
@@ -345,22 +379,8 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                                 }`}
                                 title="Click to toggle status"
                               >
-                                  {inv.status === 'Paid' ? (
-                                    <>
-                                      <CheckCircle2 className="w-3.5 h-3.5" />
-                                      <span>Paid</span>
-                                    </>
-                                  ) : inv.status === 'Overdue' ? (
-                                    <>
-                                      <AlertCircle className="w-3.5 h-3.5" />
-                                      <span>Overdue</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Clock className="w-3.5 h-3.5" />
-                                      <span>Pending</span>
-                                    </>
-                                  )}
+                                  {inv.status === 'Paid' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
+                                  <span>{inv.status}</span>
                               </button>
                            </td>
                            <td className="px-4 py-4 text-center">
@@ -374,13 +394,6 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                            </td>
                         </tr>
                     ))}
-                    {filteredInvoices.length === 0 && (
-                        <tr>
-                            <td colSpan={6} className="text-center py-12 text-gray-400">
-                                No sales invoices found matching filters.
-                            </td>
-                        </tr>
-                    )}
                  </tbody>
               </table>
            </div>
@@ -392,7 +405,10 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
   // --- CREATE / EDIT / PREVIEW VIEW ---
   return (
     <div className="space-y-6">
-      {/* Toast Notification - Hidden in Print */}
+      {/* Scanner Overlay */}
+      {showScanner && <BarcodeScanner onScan={handleScan} onClose={() => setShowScanner(false)} />}
+
+      {/* Toast Notification */}
       {showSaveSuccess && (
         <div className="fixed top-4 right-4 bg-emerald-600 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-center gap-2 animate-in slide-in-from-top-5 print:hidden">
           <CheckCircle2 className="w-5 h-5" />
@@ -400,10 +416,11 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
         </div>
       )}
       
-      {sendSuccess && (
-        <div className="fixed top-4 right-4 bg-blue-600 text-white px-6 py-3 rounded-lg shadow-xl z-50 flex items-center gap-2 animate-in slide-in-from-top-5 print:hidden">
-          <Mail className="w-5 h-5" />
-          <span className="font-medium">Invoice Sent Successfully!</span>
+      {/* Scan Feedback Toast */}
+      {scanMessage && (
+        <div className="fixed bottom-10 left-1/2 -translate-x-1/2 bg-gray-800 text-white px-6 py-3 rounded-full shadow-xl z-50 flex items-center gap-2 animate-in fade-in zoom-in-95 print:hidden">
+          {scanMessage.includes('found') ? <AlertCircle className="w-4 h-4 text-red-400"/> : <CheckCircle2 className="w-4 h-4 text-emerald-400"/>}
+          <span className="font-medium text-sm">{scanMessage}</span>
         </div>
       )}
 
@@ -428,23 +445,13 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
              </button>
            ) : (
              <div className="flex gap-2">
-               <button 
-                  onClick={handleWhatsAppShare}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 font-medium transition-colors shadow-sm"
-                  title="Share on WhatsApp"
-               >
+               <button onClick={handleWhatsAppShare} className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 font-medium transition-colors shadow-sm">
                   <MessageCircle className="w-4 h-4" /> WhatsApp
                </button>
-               <button 
-                  onClick={handlePrint}
-                  className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors shadow-sm"
-               >
+               <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 font-medium transition-colors shadow-sm">
                   <Download className="w-4 h-4" /> Download
                </button>
-               <button 
-                  onClick={handlePrint}
-                  className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium transition-colors shadow-sm"
-               >
+               <button onClick={handlePrint} className="flex items-center gap-2 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 font-medium transition-colors shadow-sm">
                   <Printer className="w-4 h-4" /> Print Invoice
                </button>
              </div>
@@ -454,7 +461,6 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
 
       {view === 'edit' ? (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in duration-300">
-          {/* Form Section */}
           <div className="lg:col-span-2 space-y-6">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
               <h2 className="text-sm font-bold text-gray-500 uppercase mb-4 tracking-wider">Bill To</h2>
@@ -488,7 +494,16 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-               <h2 className="text-sm font-bold text-gray-500 uppercase mb-4 tracking-wider">Items & Description</h2>
+               <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Items & Description</h2>
+                  <button 
+                    onClick={() => setShowScanner(true)}
+                    className="text-xs flex items-center gap-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-1.5 rounded-lg transition-colors font-medium border border-gray-200"
+                  >
+                     <ScanBarcode className="w-3.5 h-3.5" />
+                     Scan Item
+                  </button>
+               </div>
                <div className="space-y-4">
                  <div className="grid grid-cols-12 gap-4 text-xs font-bold text-gray-500 uppercase px-2">
                    <div className="col-span-5">Item</div>
@@ -554,7 +569,6 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
             </div>
           </div>
 
-          {/* Summary / Save Section */}
           <div className="lg:col-span-1">
             <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 sticky top-6">
                <h2 className="text-sm font-bold text-gray-500 uppercase mb-4 tracking-wider">Payment Details</h2>
@@ -627,10 +641,9 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
           </div>
         </div>
       ) : (
-        /* Preview & Print Template */
+        /* Preview Template - kept largely same */
         <div className="flex justify-center animate-in zoom-in-95 duration-300 print:block">
            <div className="bg-white shadow-2xl rounded-none w-full max-w-[210mm] min-h-[297mm] p-8 md:p-12 print:shadow-none print:w-full print:max-w-none print:p-0">
-              
               {/* Header */}
               <div className="flex justify-between items-start border-b-2 border-gray-800 pb-6 mb-6">
                  <div>
@@ -670,10 +683,6 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                     </div>
                     <div className="flex gap-8 justify-between">
                        <span className="text-gray-500 font-medium text-sm">Date:</span>
-                       <span className="font-bold text-gray-900">{date}</span>
-                    </div>
-                    <div className="flex gap-8 justify-between">
-                       <span className="text-gray-500 font-medium text-sm">Due Date:</span>
                        <span className="font-bold text-gray-900">{date}</span>
                     </div>
                     <div className="flex gap-8 justify-between">
@@ -745,10 +754,6 @@ export const InvoiceBuilder: React.FC<InvoiceBuilderProps> = ({ parties = [], pr
                        Authorized Signatory
                     </div>
                  </div>
-              </div>
-              
-              <div className="text-center text-xs text-gray-400 mt-12 pt-6 border-t border-gray-100">
-                 Generated via BillFlow AI
               </div>
            </div>
         </div>
