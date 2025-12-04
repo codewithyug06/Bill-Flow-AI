@@ -1,0 +1,43 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper: Check if user is signed in
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Helper: Check if requester is the Business Owner
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Helper: Check if requester is a Staff Member of the Business Owner
+    // This looks up the requester's own profile to check their 'role' and 'businessId'
+    function isStaffOf(businessOwnerId) {
+      return isSignedIn() && 
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.businessId == businessOwnerId &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'staff';
+    }
+
+    match /users/{userId} {
+      // 1. Users can read/write their own profile
+      // 2. Business Owners can read their staff's profiles
+      // 3. Staff can read their Business Owner's profile (to fetch Business Name)
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId || 
+        (resource.data.businessId == request.auth.uid) || 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.businessId == userId)
+      );
+      
+      // Only the user can write their own profile
+      allow write: if isSignedIn() && request.auth.uid == userId;
+      
+      // --- Business Data Subcollections (invoices, products, parties, etc.) ---
+      // Path pattern: /users/{businessOwnerId}/invoices/{docId}
+      match /{collectionName}/{docId} {
+        allow read, write: if isOwner(userId) || isStaffOf(userId);
+      }
+    }
+  }
+}

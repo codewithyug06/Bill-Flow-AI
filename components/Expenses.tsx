@@ -1,8 +1,7 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Expense } from '../types';
-import { Plus, Search, Tag, Calendar, Wallet, Loader2, Sparkles } from 'lucide-react';
-import { GeminiService } from '../services/geminiService';
+import { Plus, Search } from 'lucide-react';
 
 interface ExpensesProps {
   expenses: Expense[];
@@ -18,18 +17,20 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAddExpense }) =>
     category: '',
     paymentMode: 'Cash'
   });
-  const [categorizing, setCategorizing] = useState(false);
 
-  const handleDescriptionChange = async (desc: string) => {
+  // Esc listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowAddModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  const handleDescriptionChange = (desc: string) => {
     setNewExpense(prev => ({ ...prev, description: desc }));
-    
-    // Debounce or simple check for AI suggestion
-    if (desc.length > 5 && !categorizing) {
-       setCategorizing(true);
-       const category = await GeminiService.suggestExpenseCategory(desc);
-       setNewExpense(prev => ({ ...prev, description: desc, category }));
-       setCategorizing(false);
-    }
   };
 
   const handleSave = () => {
@@ -127,7 +128,6 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAddExpense }) =>
                            value={newExpense.description}
                            onChange={e => handleDescriptionChange(e.target.value)}
                         />
-                        {categorizing && <Loader2 className="absolute right-3 top-2.5 w-4 h-4 animate-spin text-red-500" />}
                      </div>
                   </div>
                   
@@ -155,15 +155,14 @@ export const Expenses: React.FC<ExpensesProps> = ({ expenses, onAddExpense }) =>
                   <div className="grid grid-cols-2 gap-4">
                      <div>
                         <label className="text-sm font-medium text-gray-700 block mb-1 flex items-center gap-1">
-                           Category {newExpense.category && <Sparkles className="w-3 h-3 text-yellow-500" />}
+                           Category
                         </label>
                         <input 
                            type="text" 
-                           className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none bg-gray-50"
+                           className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-transparent outline-none"
                            value={newExpense.category}
-                           readOnly={false}
                            onChange={e => setNewExpense({...newExpense, category: e.target.value})}
-                           placeholder="Auto-detected..."
+                           placeholder="Rent, Utilities, etc."
                         />
                      </div>
                      <div>

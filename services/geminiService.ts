@@ -1,118 +1,84 @@
 import { GoogleGenAI } from "@google/genai";
 
-// Initialize Gemini AI Client
-// The API key must be obtained exclusively from the environment variable process.env.API_KEY
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
-const MODEL_FAST = 'gemini-2.5-flash';
-const MODEL_REASONING = 'gemini-3-pro-preview';
+// Safely access environment variable to prevent browser crash
+const apiKey = (typeof process !== 'undefined' && process.env) ? process.env.API_KEY : '';
 
 export const GeminiService = {
-  /**
-   * Generates a product description based on name and category.
-   * Uses Flash model for speed.
-   */
-  generateProductDescription: async (name: string, category: string): Promise<string> => {
+  generateProductDescription: async (name: string, category: string) => {
+    if (!apiKey) return "";
     try {
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: MODEL_FAST,
-        contents: `Write a short, professional, and attractive product description (max 2 sentences) for an inventory item.
-        Product Name: ${name}
-        Category: ${category}
-        Target Audience: Retail customers.`,
+        model: 'gemini-2.5-flash',
+        contents: `Write a short, engaging product description for ${name} (${category}).`,
       });
-      return response.text || "No description generated.";
-    } catch (error) {
-      console.error("Gemini API Error:", error);
-      return "Description generation failed. Please try again.";
+      return response.text || "";
+    } catch (e) {
+      console.error("Gemini Error:", e);
+      return "";
     }
   },
 
-  /**
-   * Analyzes sales data to provide business insights.
-   * Uses Pro model for complex reasoning.
-   */
-  analyzeBusinessData: async (summaryContext: string): Promise<string> => {
-    try {
-      const response = await ai.models.generateContent({
-        model: MODEL_REASONING,
-        contents: `You are a smart business analyst for a small business. Analyze the following data context and provide 3 brief, actionable bullet points for the business owner.
-        
-        Data Context:
-        ${summaryContext}
-        
-        Format output as plain text with bullet points.`,
-      });
-      return response.text || "Could not analyze data.";
-    } catch (error) {
-      console.error("Gemini API Error:", error);
-      return "Analysis unavailable.";
-    }
+  analyzeBusinessData: async (data: any) => {
+    // Placeholder for future implementation
+    return "Analysis pending implementation.";
   },
 
-  /**
-   * Auto-categorizes expenses based on description.
-   * Uses Flash model.
-   */
-  suggestExpenseCategory: async (description: string): Promise<string> => {
+  suggestExpenseCategory: async (description: string) => {
+    if (!apiKey) return "Other";
     try {
+      const ai = new GoogleGenAI({ apiKey });
       const response = await ai.models.generateContent({
-        model: MODEL_FAST,
-        contents: `Categorize this business expense into one of these exact categories: 'Rent', 'Utilities', 'Travel', 'Inventory', 'Marketing', 'Salaries', 'Maintenance', 'Office Supplies', 'Other'. Return ONLY the category name.
-        Expense Description: ${description}`,
+        model: 'gemini-2.5-flash',
+        contents: `Suggest a one-word category for this expense: "${description}". Examples: Rent, Utilities, Salary, Travel, Food, Office, Inventory. Only return the category word.`,
       });
       return response.text?.trim() || "Other";
-    } catch (error) {
-      return "Other";
+    } catch (e) {
+       console.error("Gemini Error:", e);
+       return "Other";
     }
   },
 
-  /**
-   * Analyzes a financial report.
-   * Uses Pro model for detailed analysis.
-   */
-  analyzeReport: async (reportData: string, reportType: string): Promise<string> => {
+  analyzeReport: async (data: any) => {
+    // Placeholder for future implementation
+    return "";
+  },
+
+  askAssistant: async (
+    history: { role: string; text: string }[],
+    currentInput: string,
+    contextData: string
+  ) => {
+    if (!apiKey) return "Gemini API key is missing. Please configure it in your environment.";
+    
     try {
-      const response = await ai.models.generateContent({
-        model: MODEL_REASONING,
-        contents: `Analyze this ${reportType} report for a small business owner. Highlight key trends, anomalies, or areas for improvement in a friendly, professional tone. Keep it under 100 words.
+        const ai = new GoogleGenAI({ apiKey });
         
-        Report Data:
-        ${reportData}`,
-      });
-      return response.text || "Analysis pending...";
-    } catch (error) {
-      return "Could not generate report analysis.";
-    }
-  },
+        // Transform history for Gemini
+        // Gemini expects role 'user' or 'model'. We map 'ai' -> 'model'.
+        // We exclude the last message because it represents the current input which is sent separately.
+        const chatHistory = history.slice(0, -1).map(msg => ({
+            role: msg.role === 'ai' ? 'model' : 'user',
+            parts: [{ text: msg.text }]
+        }));
 
-  /**
-   * Chat with data helper.
-   * Uses Flash model for responsive chat.
-   */
-  askAssistant: async (history: {role: string, text: string}[], question: string, contextData: string): Promise<string> => {
-    try {
-      // Construct the conversation history including the system context
-      const contents = [
-        { 
-          role: 'user', 
-          parts: [{ text: `System Context: You are a helpful billing assistant. Use this business data to answer the user's questions accurately: ${contextData}` }] 
-        },
-        ...history.map(h => ({ 
-          role: h.role === 'ai' ? 'model' : 'user', 
-          parts: [{ text: h.text }] 
-        })),
-        { role: 'user', parts: [{ text: question }] }
-      ];
+        const chat = ai.chats.create({
+            model: 'gemini-2.5-flash',
+            config: {
+                systemInstruction: `You are a smart business assistant for Bill Flux. 
+                Use the following business data context to answer user queries:
+                ${contextData}
+                
+                Keep answers concise, helpful and strictly related to business operations.`,
+            },
+            history: chatHistory
+        });
 
-      const response = await ai.models.generateContent({
-        model: MODEL_FAST,
-        contents: contents as any,
-      });
-      return response.text || "I'm not sure how to answer that.";
+        const result = await chat.sendMessage({ message: currentInput });
+        return result.text || "No response generated.";
     } catch (error) {
-        console.error("Gemini Chat Error", error);
-        return "Sorry, I encountered an error processing your request.";
+        console.error("Gemini Assistant Error:", error);
+        return "I encountered an error while processing your request.";
     }
   }
 };

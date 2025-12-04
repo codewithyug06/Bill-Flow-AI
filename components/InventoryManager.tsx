@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { Product } from '../types';
-import { Search, Plus, Edit2, Trash2, Sparkles, Loader2, ScanBarcode } from 'lucide-react';
-import { GeminiService } from '../services/geminiService';
+import { Search, Plus, Edit2, Trash2, ScanBarcode } from 'lucide-react';
 import { BarcodeScanner } from './BarcodeScanner';
 
 interface InventoryManagerProps {
@@ -15,21 +15,24 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ products, se
   const [newProduct, setNewProduct] = useState<Partial<Product>>({
     name: '', category: '', price: 0, stock: 0, unit: 'pcs', description: '', barcode: ''
   });
-  const [aiLoading, setAiLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Close modal on Esc
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setIsModalOpen(false);
+        setShowScanner(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   const filteredProducts = products.filter(p => 
     p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
     (p.barcode && p.barcode.includes(searchTerm))
   );
-
-  const handleGenerateDescription = async () => {
-    if (!newProduct.name || !newProduct.category) return;
-    setAiLoading(true);
-    const description = await GeminiService.generateProductDescription(newProduct.name, newProduct.category);
-    setNewProduct(prev => ({ ...prev, description }));
-    setAiLoading(false);
-  };
 
   const handleSaveProduct = () => {
     if (newProduct.name && newProduct.price) {
@@ -122,25 +125,25 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ products, se
             </thead>
             <tbody className="divide-y divide-gray-100">
               {filteredProducts.map((product) => (
-                <tr key={product.id} className="hover:bg-gray-50 transition-colors">
+                <tr key={product.id} className="hover:bg-indigo-50/60 transition-colors duration-200 group">
                   <td className="px-6 py-4">
-                    <div className="font-medium text-gray-900">{product.name}</div>
+                    <div className="font-medium text-gray-900 group-hover:text-indigo-700 transition-colors">{product.name}</div>
                     <div className="text-xs text-gray-400 truncate max-w-[200px]">{product.description}</div>
                   </td>
                   <td className="px-6 py-4 text-xs font-mono text-gray-500">
                     {product.barcode || '-'}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-600"><span className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-medium">{product.category}</span></td>
+                  <td className="px-6 py-4 text-sm text-gray-600"><span className="px-2 py-1 bg-indigo-50 text-indigo-600 rounded-full text-xs font-medium border border-indigo-100">{product.category}</span></td>
                   <td className="px-6 py-4 text-sm text-gray-600">
                     <div className={`flex items-center gap-2 ${product.stock < 10 ? 'text-red-500 font-medium' : ''}`}>
                       {product.stock} {product.unit}
-                      {product.stock < 10 && <span className="w-2 h-2 rounded-full bg-red-500"></span>}
+                      {product.stock < 10 && <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">${product.price.toFixed(2)}</td>
                   <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                      <button onClick={() => handleEditClick(product)} className="p-1.5 hover:bg-gray-200 rounded-md text-gray-500"><Edit2 className="w-4 h-4" /></button>
+                    <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleEditClick(product)} className="p-1.5 hover:bg-white rounded-md text-gray-500 shadow-sm border border-transparent hover:border-gray-200"><Edit2 className="w-4 h-4" /></button>
                       <button onClick={() => handleDeleteClick(product.id)} className="p-1.5 hover:bg-red-50 hover:text-red-500 rounded-md text-gray-500"><Trash2 className="w-4 h-4" /></button>
                     </div>
                   </td>
@@ -238,14 +241,6 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ products, se
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
                   <label className="text-sm font-medium text-gray-700">Description</label>
-                  <button 
-                    onClick={handleGenerateDescription}
-                    disabled={!newProduct.name || !newProduct.category || aiLoading}
-                    className="text-xs flex items-center gap-1 text-indigo-600 hover:text-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-                  >
-                    {aiLoading ? <Loader2 className="w-3 h-3 animate-spin"/> : <Sparkles className="w-3 h-3" />}
-                    AI Auto-Write
-                  </button>
                 </div>
                 <textarea 
                   className="w-full border border-gray-300 rounded-lg px-3 py-2 h-24 resize-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
@@ -275,3 +270,4 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({ products, se
     </div>
   );
 };
+    

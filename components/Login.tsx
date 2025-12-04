@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { User } from '../types';
 import { ArrowRight, Lock, Mail, Building, User as UserIcon, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react';
@@ -41,7 +40,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
         // Generate deterministic credentials
         const sanitizedName = ownerName.toLowerCase().replace(/[^a-z0-9]/g, '');
         const sanitizedCode = businessCode.trim();
-        const syntheticEmail = `staff.${sanitizedCode}.${sanitizedName}@billnexa.internal`;
+        const syntheticEmail = `staff.${sanitizedCode}.${sanitizedName}@billflux.internal`;
         const syntheticPass = `staff-${sanitizedCode}-${sanitizedName}-secure`;
 
         try {
@@ -136,7 +135,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                  <BrandLogo className="w-14 h-14" variant="white" />
               </div>
               <div>
-                <h1 className="text-4xl font-bold text-white tracking-tight">BillNexa</h1>
+                <h1 className="text-4xl font-bold text-white tracking-tight">Bill Flux</h1>
                 <p className="text-teal-400 text-lg font-medium">Smart Business Intelligence</p>
               </div>
            </div>
@@ -153,8 +152,8 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
                   <CheckCircle2 className="w-6 h-6 text-teal-400" />
                 </div>
                 <div>
-                  <h3 className="text-white font-semibold">AI-Powered Insights</h3>
-                  <p className="text-slate-400 text-sm">Get real-time suggestions to optimize your cash flow.</p>
+                  <h3 className="text-white font-semibold">Smart Analytics</h3>
+                  <p className="text-slate-400 text-sm">Get real-time data to optimize your cash flow.</p>
                 </div>
               </div>
               <div className="flex items-center gap-4 p-4 bg-white/5 border border-white/10 rounded-xl backdrop-blur-md hover:bg-white/10 transition-colors">
@@ -181,7 +180,7 @@ export const Login: React.FC<LoginProps> = ({ onLogin }) => {
             {/* Mobile Branding */}
             <div className="lg:hidden flex flex-col items-center mb-8">
                <BrandLogo className="w-16 h-16 mb-4" variant="color" />
-               <h1 className="text-3xl font-bold text-white">BillNexa</h1>
+               <h1 className="text-3xl font-bold text-white">Bill Flux</h1>
             </div>
 
             <div className="bg-white/5 backdrop-blur-xl border border-white/10 p-8 md:p-10 rounded-3xl shadow-2xl">

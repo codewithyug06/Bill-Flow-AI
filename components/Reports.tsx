@@ -1,8 +1,6 @@
-
 import React, { useState, useMemo } from 'react';
-import { BarChart3, Download, Calendar, Sparkles, TrendingUp, TrendingDown, ArrowRight, ChevronDown } from 'lucide-react';
+import { BarChart3, Download, Calendar, TrendingUp, TrendingDown, ArrowRight, ChevronDown } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
-import { GeminiService } from '../services/geminiService';
 import { Invoice, Purchase } from '../types';
 
 interface ReportsProps {
@@ -12,8 +10,6 @@ interface ReportsProps {
 
 export const Reports: React.FC<ReportsProps> = ({ invoices, purchases }) => {
   const [activeTab, setActiveTab] = useState<'sales' | 'gst' | 'stock'>('sales');
-  const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
-  const [analyzing, setAnalyzing] = useState(false);
   const [year, setYear] = useState(new Date().getFullYear());
   const [showYearMenu, setShowYearMenu] = useState(false);
 
@@ -59,23 +55,6 @@ export const Reports: React.FC<ReportsProps> = ({ invoices, purchases }) => {
       netProfit: tSales - tPurchases
     };
   }, [invoices, purchases, year]);
-
-  const handleAnalyze = async () => {
-    setAnalyzing(true);
-    let dataContext = '';
-    
-    if (activeTab === 'sales') {
-       dataContext = `Sales vs Purchase Summary for ${year}. 
-       Total Sales: ${totalSales}. Total Purchase: ${totalPurchases}. Net Profit: ${netProfit}.
-       Monthly Breakdown: ${JSON.stringify(chartData.map(d => `${d.name}: Sales ${d.sales}, Purch ${d.purchase}`))}`;
-    } else {
-       dataContext = "GST Report Context: Standard simplified GST analysis based on generic turnover logic.";
-    }
-    
-    const analysis = await GeminiService.analyzeReport(dataContext, activeTab === 'sales' ? 'Financial' : 'GST');
-    setAiAnalysis(analysis);
-    setAnalyzing(false);
-  };
 
   const handleExport = () => {
     // 1. Define Headers
@@ -148,7 +127,7 @@ export const Reports: React.FC<ReportsProps> = ({ invoices, purchases }) => {
          {['sales', 'gst', 'stock'].map((tab) => (
            <button
              key={tab}
-             onClick={() => { setActiveTab(tab as any); setAiAnalysis(null); }}
+             onClick={() => setActiveTab(tab as any)}
              className={`pb-3 text-sm font-bold capitalize transition-all border-b-2 ${
                activeTab === tab 
                  ? 'border-teal-600 text-teal-700' 
@@ -158,35 +137,6 @@ export const Reports: React.FC<ReportsProps> = ({ invoices, purchases }) => {
              {tab === 'gst' ? 'GSTR Reports' : `${tab} Overview`}
            </button>
          ))}
-      </div>
-
-      {/* AI Analysis Card */}
-      <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-6 rounded-2xl shadow-lg relative overflow-hidden text-white">
-         <div className="absolute top-0 right-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
-         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 relative z-10">
-            <div className="flex gap-4">
-               <div className="bg-white/10 p-3 rounded-xl backdrop-blur-sm h-fit">
-                  <Sparkles className="w-6 h-6 text-yellow-300" />
-               </div>
-               <div>
-                  <h3 className="font-bold text-lg mb-1">AI Smart Analysis</h3>
-                  {aiAnalysis ? (
-                    <p className="text-indigo-100 text-sm leading-relaxed max-w-3xl">{aiAnalysis}</p>
-                  ) : (
-                    <p className="text-indigo-200 text-sm">Tap analyze to generate a deep-dive report on your {activeTab} performance.</p>
-                  )}
-               </div>
-            </div>
-            {!aiAnalysis && (
-              <button 
-                onClick={handleAnalyze}
-                disabled={analyzing}
-                className="px-5 py-2.5 bg-white text-indigo-700 text-sm font-bold rounded-xl hover:bg-indigo-50 shadow-lg transition-all disabled:opacity-70 whitespace-nowrap"
-              >
-                {analyzing ? 'Thinking...' : 'Analyze Now'}
-              </button>
-            )}
-         </div>
       </div>
 
       {activeTab === 'sales' && (

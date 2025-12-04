@@ -101,6 +101,8 @@ export interface User {
   businessName: string;
   gstin?: string;
   address?: string;
+  logoUrl?: string; // Base64 or URL
+  signatureUrl?: string; // Base64 or URL
   // Multi-user fields
   role: 'owner' | 'staff';
   businessId: string; // If owner, equals id. If staff, equals owner's id.
@@ -122,4 +124,13 @@ export interface Insight {
   title: string;
   content: string;
   type: 'positive' | 'negative' | 'neutral' | 'action';
+}
+
+export interface AuditLog {
+  id: string;
+  date: string;
+  action: string;
+  details: string;
+  userId: string;
+  userName: string;
 }

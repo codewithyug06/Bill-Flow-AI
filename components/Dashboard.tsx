@@ -1,9 +1,7 @@
-
-import React, { useEffect, useState, useMemo } from 'react';
-import { ArrowUpRight, ArrowDownLeft, RefreshCw, Sparkles, ChevronRight, TrendingUp } from 'lucide-react';
-import { GeminiService } from '../services/geminiService';
+import React, { useMemo } from 'react';
+import { ArrowUpRight, ArrowDownLeft, ChevronRight, TrendingUp, Filter, MoreHorizontal, Wallet, ShoppingCart, ShoppingBag } from 'lucide-react';
 import { Transaction, Party, Invoice, Purchase, ViewState } from '../types';
-import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, Tooltip, ResponsiveContainer, Cell, AreaChart, Area, CartesianGrid } from 'recharts';
 
 interface DashboardProps {
   transactions: Transaction[];
@@ -14,10 +12,7 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, invoices, purchases, onNavigate }) => {
-  const [aiInsight, setAiInsight] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  // Calculated Stats based on actual Invoices and Purchases status
+  // Calculated Stats
   const toCollect = invoices
     .filter(inv => inv.status === 'Pending' || inv.status === 'Overdue')
     .reduce((sum, inv) => sum + inv.total, 0);
@@ -26,6 +21,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, inv
     .filter(pur => pur.status === 'Unpaid')
     .reduce((sum, pur) => sum + (pur.unpaidAmount || pur.amount), 0);
   
+  const totalRevenue = invoices.reduce((sum, inv) => sum + inv.total, 0);
+
   // Recent 5 transactions
   const recentTxns = transactions.slice(0, 5);
 
@@ -33,12 +30,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, inv
   const salesData = useMemo(() => {
     const data = [];
     const today = new Date();
-    // Last 7 days
     for (let i = 6; i >= 0; i--) {
       const d = new Date(today);
       d.setDate(today.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
-      // Format: "Mon", "Tue"
       const dayName = d.toLocaleDateString('en-US', { weekday: 'short' });
       
       const total = invoices
@@ -50,174 +45,151 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, inv
     return data;
   }, [invoices]);
 
-  const weeklyTotal = salesData.reduce((sum, day) => sum + day.amount, 0);
-
-  const generateInsights = async () => {
-    setLoading(true);
-    const context = `
-      To Collect (Pending Sales): ${toCollect}
-      To Pay (Unpaid Purchases): ${toPay}
-      Recent Transaction Count: ${transactions.length}
-      Weekly Sales: ${weeklyTotal}
-      Latest Txn: ${transactions[0]?.type} of ${transactions[0]?.amount}
-    `;
-    const insight = await GeminiService.analyzeBusinessData(context);
-    setAiInsight(insight);
-    setLoading(false);
-  };
-
-  useEffect(() => {
-    if (!aiInsight && transactions.length > 0) generateInsights();
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const MetricCard = ({ title, amount, subtitle, icon: Icon, colorClass, gradient, onClick }: any) => (
+    <div 
+      onClick={onClick}
+      className={`relative overflow-hidden rounded-2xl p-6 shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-[1.02] cursor-pointer group ${gradient}`}
+    >
+      <div className="absolute top-0 right-0 p-4 opacity-10">
+         <Icon className="w-24 h-24" />
+      </div>
+      <div className="relative z-10">
+        <div className="flex items-center gap-2 mb-4">
+          <div className={`p-2 rounded-lg bg-white/20 backdrop-blur-sm text-white`}>
+            <Icon className="w-5 h-5" />
+          </div>
+          <span className="text-white/90 font-medium text-sm tracking-wide">{title}</span>
+        </div>
+        <div className="flex items-baseline gap-1">
+           <span className="text-3xl font-bold text-white tracking-tight">₹ {amount.toLocaleString()}</span>
+        </div>
+        <p className="text-white/70 text-xs mt-2 font-medium flex items-center gap-1">
+          {subtitle} <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+        </p>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <header className="flex justify-between items-center bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-        <h1 className="text-xl font-bold text-gray-800">Dashboard</h1>
-        <div className="flex items-center gap-4 text-xs text-gray-500">
-           <span>Last Update: {new Date().toLocaleDateString()}</span>
-           <button onClick={generateInsights} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
-             <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-           </button>
+    <div className="space-y-8 animate-in fade-in duration-500">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Dashboard Overview</h1>
+          <p className="text-gray-500 text-sm mt-1">Welcome back! Here's what's happening today.</p>
+        </div>
+        <div className="flex items-center gap-3 bg-white p-1.5 rounded-xl border border-gray-200 shadow-sm">
+           <button className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg">Today</button>
+           <button className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 rounded-lg transition-colors">7 Days</button>
+           <button className="px-3 py-1.5 text-xs font-medium text-gray-500 hover:bg-gray-50 rounded-lg transition-colors">Month</button>
         </div>
       </header>
 
-      {/* Gemini Insight Banner */}
-      {aiInsight && (
-        <div className="bg-gradient-to-r from-teal-600 to-emerald-600 rounded-xl p-4 text-white shadow-lg flex items-start gap-3 relative overflow-hidden">
-          <div className="absolute -right-10 -top-10 opacity-20">
-            <Sparkles size={120} />
-          </div>
-          <Sparkles className="w-5 h-5 shrink-0 mt-0.5" />
-          <div className="flex-1 relative z-10">
-            <h3 className="font-semibold text-sm opacity-90 mb-1">AI Business Insight</h3>
-            <p className="text-sm leading-relaxed opacity-95 whitespace-pre-line">{aiInsight}</p>
-          </div>
-        </div>
-      )}
+      {/* Metric Cards Row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <MetricCard 
+          title="Total Receivables" 
+          amount={toCollect} 
+          subtitle="Pending from Customers" 
+          icon={ArrowDownLeft}
+          gradient="bg-gradient-to-br from-emerald-500 to-teal-600"
+          onClick={() => onNavigate('sales')}
+        />
+        <MetricCard 
+          title="Total Payables" 
+          amount={toPay} 
+          subtitle="Due to Suppliers" 
+          icon={ArrowUpRight}
+          gradient="bg-gradient-to-br from-rose-500 to-orange-600"
+          onClick={() => onNavigate('purchases')}
+        />
+        <MetricCard 
+          title="Total Revenue" 
+          amount={totalRevenue} 
+          subtitle="Lifetime Sales" 
+          icon={Wallet}
+          gradient="bg-gradient-to-br from-blue-500 to-indigo-600"
+          onClick={() => onNavigate('reports')}
+        />
+      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Business Overview Cards */}
-        <div className="lg:col-span-3 grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* To Collect */}
-          <div 
-            onClick={() => onNavigate('sales')}
-            className="bg-green-50 p-6 rounded-xl border border-green-100 shadow-sm relative group hover:shadow-md transition-all cursor-pointer"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-2 text-green-700 text-sm font-medium">
-                <ArrowDownLeft className="w-5 h-5" /> To Collect (Receivables)
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Weekly Revenue Chart */}
+        <div className="lg:col-span-2 bg-white rounded-2xl shadow-sm border border-gray-100 p-6 flex flex-col">
+           <div className="flex justify-between items-center mb-6">
+              <div>
+                 <h3 className="font-bold text-gray-900">Revenue Analytics</h3>
+                 <p className="text-xs text-gray-400 mt-1">Sales performance over the last 7 days</p>
               </div>
-              <ChevronRight className="w-5 h-5 text-green-400 group-hover:translate-x-1 transition-transform" />
-            </div>
-            <div className="text-3xl font-bold text-gray-800 tracking-tight">₹ {toCollect.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-            <p className="text-xs text-green-600 mt-2 font-medium">From Pending Sales Invoices</p>
-            <div className="absolute bottom-0 left-0 w-full h-1.5 bg-green-200 rounded-b-xl"></div>
-          </div>
-
-          {/* To Pay */}
-          <div 
-            onClick={() => onNavigate('purchases')}
-            className="bg-red-50 p-6 rounded-xl border border-red-100 shadow-sm relative group hover:shadow-md transition-all cursor-pointer"
-          >
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-2 text-red-700 text-sm font-medium">
-                <ArrowUpRight className="w-5 h-5" /> To Pay (Payables)
-              </div>
-              <ChevronRight className="w-5 h-5 text-red-400 group-hover:translate-x-1 transition-transform" />
-            </div>
-            <div className="text-3xl font-bold text-gray-800 tracking-tight">₹ {toPay.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-            <p className="text-xs text-red-600 mt-2 font-medium">From Unpaid Purchase Bills</p>
-            <div className="absolute bottom-0 left-0 w-full h-1.5 bg-red-200 rounded-b-xl"></div>
-          </div>
-        </div>
-
-        {/* Latest Transactions */}
-        <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="p-4 border-b border-gray-100 flex justify-between items-center">
-             <h3 className="font-semibold text-gray-800">Latest Transactions</h3>
-             <button className="text-xs text-blue-600 font-medium hover:underline">See All</button>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-gray-500 font-medium uppercase text-xs">
-                <tr>
-                  <th className="px-4 py-3">Date</th>
-                  <th className="px-4 py-3">Type</th>
-                  <th className="px-4 py-3">Txn No</th>
-                  <th className="px-4 py-3">Party Name</th>
-                  <th className="px-4 py-3 text-right">Amount</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {recentTxns.length > 0 ? (
-                  recentTxns.map((txn) => (
-                    <tr key={txn.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 text-gray-600">{txn.date}</td>
-                      <td className="px-4 py-3 text-gray-800 font-medium flex items-center gap-2">
-                        {txn.type.includes('Sale') 
-                          ? <div className="w-2 h-2 rounded-full bg-green-500"/> 
-                          : txn.type.includes('Purchase') 
-                             ? <div className="w-2 h-2 rounded-full bg-red-500"/>
-                             : <div className="w-2 h-2 rounded-full bg-blue-500"/>
-                        }
-                        {txn.type}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500">{txn.txnNo}</td>
-                      <td className="px-4 py-3 text-gray-800">{txn.partyName}</td>
-                      <td className="px-4 py-3 text-right font-medium text-gray-800">₹ {txn.amount.toLocaleString()}</td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr><td colSpan={5} className="p-4 text-center text-gray-400">No transactions yet</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              <button className="p-2 hover:bg-gray-50 rounded-lg transition-colors text-gray-400">
+                 <MoreHorizontal className="w-5 h-5" />
+              </button>
+           </div>
+           
+           <div className="flex-1 w-full min-h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                 <AreaChart data={salesData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#0d9488" stopOpacity={0.1}/>
+                        <stop offset="95%" stopColor="#0d9488" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis 
+                       dataKey="name" 
+                       axisLine={false} 
+                       tickLine={false} 
+                       tick={{fontSize: 12, fill: '#94a3b8', fontWeight: 500}} 
+                       dy={10}
+                    />
+                    <Tooltip 
+                       cursor={{stroke: '#0d9488', strokeWidth: 1, strokeDasharray: '4 4'}}
+                       contentStyle={{borderRadius: '12px', border: 'none', boxShadow: '0 4px 20px rgba(0,0,0,0.08)'}}
+                       itemStyle={{color: '#0f766e', fontWeight: 600}}
+                    />
+                    <Area type="monotone" dataKey="amount" stroke="#0d9488" strokeWidth={3} fillOpacity={1} fill="url(#colorSales)" />
+                 </AreaChart>
+              </ResponsiveContainer>
+           </div>
         </div>
 
-        {/* Right Column: Weekly Sales Graph */}
-        <div className="space-y-6">
-           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm h-full flex flex-col min-h-[300px]">
-              <div className="flex justify-between items-center mb-6">
-                 <h3 className="font-semibold text-gray-800">Weekly Sales</h3>
-                 <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full flex items-center gap-1">
-                    <TrendingUp className="w-3 h-3" /> Last 7 Days
-                 </span>
-              </div>
-              
-              <div className="flex-1 w-full min-h-[200px]">
-                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={salesData}>
-                       <XAxis 
-                          dataKey="name" 
-                          axisLine={false} 
-                          tickLine={false} 
-                          tick={{fontSize: 11, fill: '#9ca3af'}} 
-                          dy={10}
-                       />
-                       <Tooltip 
-                          cursor={{fill: '#f0fdf4'}}
-                          contentStyle={{borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}}
-                          itemStyle={{color: '#0f766e', fontWeight: 600}}
-                          formatter={(value: number) => [`₹ ${value.toLocaleString()}`, 'Sales']}
-                       />
-                       <Bar dataKey="amount" radius={[4, 4, 0, 0]}>
-                          {salesData.map((entry, index) => (
-                             <Cell key={`cell-${index}`} fill={entry.amount > 0 ? '#0d9488' : '#e2e8f0'} />
-                          ))}
-                       </Bar>
-                    </BarChart>
-                 </ResponsiveContainer>
-              </div>
-              
-              <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between items-center text-sm">
-                 <span className="text-gray-500">Total this week</span>
-                 <span className="font-bold text-gray-800">
-                    ₹ {weeklyTotal.toLocaleString()}
-                 </span>
-              </div>
+        {/* Latest Transactions Feed */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col h-full overflow-hidden">
+           <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
+              <h3 className="font-bold text-gray-900">Recent Activity</h3>
+              <button className="text-xs font-semibold text-brand-600 hover:text-brand-700">View All</button>
+           </div>
+           
+           <div className="overflow-y-auto custom-scrollbar flex-1">
+              {recentTxns.length > 0 ? (
+                 <div className="divide-y divide-gray-50">
+                    {recentTxns.map((txn) => (
+                      <div key={txn.id} className="p-4 hover:bg-gray-50/50 transition-colors flex items-center gap-4 group cursor-pointer">
+                         <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                            txn.type.includes('Sale') ? 'bg-emerald-100 text-emerald-600' :
+                            txn.type.includes('Purchase') ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'
+                         }`}>
+                            {txn.type.includes('Sale') ? <ShoppingBag className="w-5 h-5" /> : 
+                             txn.type.includes('Purchase') ? <ShoppingCart className="w-5 h-5" /> : <Wallet className="w-5 h-5" />}
+                         </div>
+                         <div className="flex-1 min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{txn.partyName || 'Unknown Party'}</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                               <span className="text-[10px] uppercase font-bold text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{txn.txnNo}</span>
+                               <span className="text-xs text-gray-500">{txn.date}</span>
+                            </div>
+                         </div>
+                         <div className={`font-bold text-sm whitespace-nowrap ${txn.type.includes('Sale') ? 'text-emerald-600' : 'text-gray-800'}`}>
+                            {txn.type.includes('Sale') ? '+' : '-'} ₹ {txn.amount.toLocaleString()}
+                         </div>
+                      </div>
+                    ))}
+                 </div>
+              ) : (
+                 <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                    <p className="text-sm">No recent transactions</p>
+                 </div>
+              )}
            </div>
         </div>
       </div>

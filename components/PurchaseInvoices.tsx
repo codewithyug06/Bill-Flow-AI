@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { Search, Plus, Filter, Calendar, Eye, FileText, ArrowUpRight, ArrowDownLeft, Trash2, ChevronLeft, CheckCircle2, Printer, Download, Save, ChevronDown, RefreshCw, MessageCircle } from 'lucide-react';
-import { Product, Party, Purchase } from '../types';
+import { Product, Party, Purchase, User } from '../types';
+import { BrandLogo } from './BrandLogo';
 
 interface PurchaseInvoicesProps {
   products: Product[];
@@ -9,9 +10,10 @@ interface PurchaseInvoicesProps {
   existingPurchases: Purchase[];
   onSavePurchase: (purchase: Purchase) => void;
   onUpdateStatus?: (purchase: Purchase, newStatus: 'Paid' | 'Unpaid') => void;
+  user?: User | null;
 }
 
-export const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ products, parties = [], existingPurchases, onSavePurchase, onUpdateStatus }) => {
+export const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ products, parties = [], existingPurchases, onSavePurchase, onUpdateStatus, user }) => {
   const [view, setView] = useState<'list' | 'create' | 'preview'>('list');
   const [searchTerm, setSearchTerm] = useState('');
   const [dateRange, setDateRange] = useState('Last 365 Days');
@@ -517,7 +519,16 @@ export const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ products, pa
                      <p className="text-sm text-gray-500">Original Copy</p>
                   </div>
                   <div className="text-right">
-                     <p className="font-bold text-lg text-gray-800 uppercase">Your Business Name</p>
+                    {user?.logoUrl ? (
+                         <div className="w-32 h-32 flex items-center justify-center mb-4 ml-auto">
+                            <img src={user.logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                         </div>
+                    ) : (
+                         <div className="w-24 h-24 bg-gray-50 rounded-lg flex items-center justify-center text-gray-400 border border-gray-200 mb-4 ml-auto">
+                            <BrandLogo className="w-16 h-16" variant="color" />
+                         </div>
+                    )}
+                     <p className="font-bold text-lg text-gray-800 uppercase">{user?.businessName || 'Your Business Name'}</p>
                   </div>
                </div>
 
@@ -573,8 +584,15 @@ export const PurchaseInvoices: React.FC<PurchaseInvoicesProps> = ({ products, pa
                   <div className="text-center pt-8 border-t border-gray-300 w-48">
                      <p className="text-xs font-bold text-gray-500">Vendor Signature</p>
                   </div>
-                  <div className="text-center pt-8 border-t border-gray-300 w-48 ml-auto">
-                     <p className="text-xs font-bold text-gray-500">Authorized Signatory</p>
+                  <div className="text-right flex flex-col items-end justify-end">
+                      <div className="h-16 flex items-end justify-center w-48">
+                         {user?.signatureUrl ? (
+                             <img src={user.signatureUrl} alt="Signature" className="h-full object-contain" />
+                         ) : null}
+                      </div>
+                      <div className="border-t border-gray-300 w-48 pt-2 text-center">
+                         <p className="text-xs font-bold text-gray-500">Authorized Signatory</p>
+                      </div>
                   </div>
                </div>
             </div>

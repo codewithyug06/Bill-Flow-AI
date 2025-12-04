@@ -1,6 +1,5 @@
-
 import { initializeApp } from "firebase/app";
-import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "firebase/auth";
+import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut, deleteUser } from "firebase/auth";
 import { 
   getFirestore, 
   collection, 
@@ -14,9 +13,13 @@ import {
   query,
   where,
   getDocs,
-  deleteDoc
+  deleteDoc,
+  serverTimestamp,
+  enableIndexedDbPersistence
 } from "firebase/firestore";
-import { Invoice, Purchase, Product, Party, Transaction, Expense, User, Estimate } from "../types";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { getPerformance } from "firebase/performance";
+import { Invoice, Purchase, Product, Party, Transaction, Expense, User, Estimate, AuditLog } from "../types";
 
 // --- CONFIGURE YOUR FIREBASE PROJECT HERE ---
 const firebaseConfig = {
@@ -34,8 +37,39 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 const auth = getAuth(app);
+const functions = getFunctions(app);
+// Initialize Performance Monitoring
+const perf = getPerformance(app);
+
+// Enable Offline Persistence
+enableIndexedDbPersistence(db).catch((err) => {
+  if (err.code == 'failed-precondition') {
+      console.warn('Persistence failed: Multiple tabs open');
+  } else if (err.code == 'unimplemented') {
+      console.warn('Persistence failed: Browser not supported');
+  }
+});
 
 console.log("Firebase Initialized Successfully (Modular SDK)");
+
+// Helper for audit logs
+const logAudit = async (businessId: string, action: string, details: string) => {
+  const user = auth.currentUser;
+  if (!user) return;
+
+  const logRef = doc(collection(db, "users", businessId, "audit_logs"));
+  const log: AuditLog = {
+    id: logRef.id,
+    date: new Date().toISOString(),
+    action,
+    details,
+    userId: user.uid,
+    userName: user.displayName || 'Unknown User'
+  };
+  // We use setDoc instead of add to control ID if needed, but here simple add is fine.
+  // Using setDoc with generated ID for consistency.
+  await setDoc(logRef, log);
+};
 
 export const FirebaseService = {
   auth,
@@ -65,6 +99,27 @@ export const FirebaseService = {
     }
   },
 
+  getUserProfile: async (uid: string): Promise<User | null> => {
+    try {
+      const userDocRef = doc(db, "users", uid);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        // Ensure legacy local users have role/businessId
+        return { 
+          id: uid, 
+          role: 'owner', 
+          businessId: uid,
+          ...userData 
+        } as User;
+      }
+      return null;
+    } catch (e) {
+      console.error("Error fetching user profile:", e);
+      return null;
+    }
+  },
+
   updateLastActive: async (uid: string) => {
     try {
       const userDocRef = doc(db, "users", uid);
@@ -74,7 +129,7 @@ export const FirebaseService = {
     }
   },
 
-  // Updated Register to handle Staff Joining
+  // Updated Register to handle Staff Joining securely
   registerUser: async (
     email: string, 
     pass: string, 
@@ -83,27 +138,47 @@ export const FirebaseService = {
     targetBusinessId?: string
   ): Promise<User> => {
     
-    // If joining as staff, verify business exists first
-    let finalBusinessId = '';
-    let finalBusinessName = profile.businessName;
-
-    if (role === 'staff') {
-      if (!targetBusinessId) throw new Error("Business Code is required for staff.");
-      
-      const ownerDoc = await getDoc(doc(db, "users", targetBusinessId));
-      if (!ownerDoc.exists()) {
-        throw new Error("Invalid Business Code. Business not found.");
-      }
-      finalBusinessId = targetBusinessId;
-      finalBusinessName = ownerDoc.data()?.businessName || profile.businessName;
-    }
-
+    // 1. Create Auth User first (so we are logged in)
     const userCredential = await createUserWithEmailAndPassword(auth, email, pass);
     const uid = userCredential.user.uid;
     
-    // If owner, businessId is their own UID
-    if (role === 'owner') {
-      finalBusinessId = uid;
+    let finalBusinessId = uid;
+    let finalBusinessName = profile.businessName;
+
+    // 2. Handle Staff Verification
+    if (role === 'staff') {
+      if (!targetBusinessId) {
+         await deleteUser(userCredential.user);
+         throw new Error("Business Code is required for staff.");
+      }
+      finalBusinessId = targetBusinessId;
+
+      // Write Temporary Profile (Required for Firestore Rules to allow reading Owner Doc)
+      // The rule 'isStaffOf' checks `get(...auth.uid).data.businessId`
+      const tempUser: User = { 
+          id: uid, 
+          ...profile,
+          businessName: 'Verifying...',
+          role, 
+          businessId: finalBusinessId,
+          lastActive: new Date().toISOString()
+      };
+      await setDoc(doc(db, "users", uid), tempUser);
+
+      try {
+        // Now try to read Owner Doc to verify existence & get name
+        // This read will succeed ONLY if the profile above was written correctly
+        const ownerDoc = await getDoc(doc(db, "users", targetBusinessId));
+        if (!ownerDoc.exists()) {
+             throw new Error("Business not found");
+        }
+        finalBusinessName = ownerDoc.data()?.businessName || profile.businessName;
+      } catch (e) {
+         // Cleanup on failure
+         await deleteDoc(doc(db, "users", uid));
+         await deleteUser(userCredential.user);
+         throw new Error("Invalid Business Code or Access Denied.");
+      }
     }
 
     const newUser: User = { 
@@ -115,6 +190,7 @@ export const FirebaseService = {
       lastActive: new Date().toISOString()
     };
 
+    // Final write (updates business name if staff)
     await setDoc(doc(db, "users", uid), newUser);
     return newUser;
   },
@@ -157,44 +233,61 @@ export const FirebaseService = {
     });
   },
 
-  createSaleBatch: async (businessId: string, invoice: Invoice, products: Product[], party: Party | undefined) => {
-    const batch = writeBatch(db);
-
-    // 1. Save Invoice
-    const invRef = doc(db, "users", businessId, "invoices", invoice.id);
-    batch.set(invRef, invoice);
-
-    // 2. Update Stock
-    invoice.items.forEach(item => {
-      const product = products.find(p => p.id === item.productId);
-      if (product) {
-        const prodRef = doc(db, "users", businessId, "products", product.id);
-        const newStock = product.stock - item.quantity;
-        batch.update(prodRef, { stock: newStock });
-      }
-    });
-
-    // 3. Update Party Balance
-    if ((invoice.status === 'Pending' || invoice.status === 'Overdue') && party) {
-      const partyRef = doc(db, "users", businessId, "parties", party.id);
-      const newBalance = (party.balance || 0) + invoice.total;
-      batch.update(partyRef, { balance: newBalance });
+  // Method to get all data from a collection once (used for export)
+  getAllCollectionData: async (businessId: string, collectionName: string) => {
+    try {
+       const q = collection(db, "users", businessId, collectionName);
+       const snapshot = await getDocs(q);
+       return snapshot.docs.map(doc => doc.data());
+    } catch (e) {
+       console.error(`Error fetching ${collectionName} for export`, e);
+       return [];
     }
+  },
 
-    // 4. Log Transaction
-    const txnRef = doc(db, "users", businessId, "transactions", invoice.id);
-    const newTxn: Transaction = {
-      id: invoice.id,
-      date: invoice.date,
-      type: 'Sales Invoice',
-      txnNo: invoice.invoiceNo,
-      partyName: invoice.customerName,
-      amount: invoice.total,
-      status: invoice.status === 'Paid' ? 'Paid' : 'Unpaid'
+  getAuditLogs: async (businessId: string): Promise<AuditLog[]> => {
+     try {
+       const q = collection(db, "users", businessId, "audit_logs");
+       const snapshot = await getDocs(q);
+       const logs = snapshot.docs.map(doc => doc.data() as AuditLog);
+       return logs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+     } catch (e) {
+       console.error("Error fetching audit logs", e);
+       return [];
+    }
+  },
+
+  createSaleBatch: async (businessId: string, invoice: Invoice, products: Product[], party: Party | undefined) => {
+    // SECURE IMPLEMENTATION: Call Cloud Function
+    // We send only the IDs and quantities. The server calculates totals based on Master Product List.
+    const createSale = httpsCallable(functions, 'createSale');
+    
+    // Prepare minimal payload
+    const payload = {
+       businessId,
+       invoiceData: {
+          id: invoice.id,
+          invoiceNo: invoice.invoiceNo,
+          date: invoice.date,
+          customerName: invoice.customerName,
+          status: invoice.status,
+          taxRate: invoice.taxRate,
+          items: invoice.items.map(item => ({
+             productId: item.productId,
+             quantity: item.quantity,
+             // We allow product name to be passed for non-inventory items if needed, 
+             // but logic primarily relies on ID
+             productName: item.productName 
+          }))
+       }
     };
-    batch.set(txnRef, newTxn);
 
-    await batch.commit();
+    try {
+       await createSale(payload);
+    } catch (error: any) {
+       console.error("Cloud Function call failed:", error);
+       throw new Error(error.message || "Failed to create sale securely");
+    }
   },
 
   updateInvoiceStatus: async (businessId: string, invoice: Invoice, newStatus: 'Paid' | 'Pending', parties: Party[]) => {
@@ -217,6 +310,62 @@ export const FirebaseService = {
        } else if (invoice.status === 'Paid' && newStatus === 'Pending') {
           batch.update(partyRef, { balance: increment(invoice.total) });
        }
+    }
+
+    // 4. Audit Log
+    const user = auth.currentUser;
+    if (user) {
+       const logRef = doc(collection(db, "users", businessId, "audit_logs"));
+       batch.set(logRef, {
+          id: logRef.id,
+          date: new Date().toISOString(),
+          action: "INVOICE_STATUS_UPDATE",
+          details: `Changed Invoice ${invoice.invoiceNo} status to ${newStatus}`,
+          userId: user.uid,
+          userName: user.displayName || user.email || 'Staff'
+       });
+    }
+
+    await batch.commit();
+  },
+
+  deleteInvoice: async (businessId: string, invoiceId: string) => {
+    const batch = writeBatch(db);
+    const invRef = doc(db, "users", businessId, "invoices", invoiceId);
+    const invSnap = await getDoc(invRef);
+
+    if (!invSnap.exists()) {
+        throw new Error("Invoice not found");
+    }
+    const invoice = invSnap.data() as Invoice;
+
+    // 1. Restore Stock for inventory items
+    for (const item of invoice.items) {
+       if (item.productId) {
+          const prodRef = doc(db, "users", businessId, "products", item.productId);
+          batch.update(prodRef, { stock: increment(item.quantity) });
+       }
+    }
+
+    // 2. Delete Invoice Document
+    batch.delete(invRef);
+
+    // 3. Delete Transaction Record
+    const txnRef = doc(db, "users", businessId, "transactions", invoiceId);
+    batch.delete(txnRef);
+
+    // 4. Audit Log
+    const user = auth.currentUser;
+    if (user) {
+        const logRef = doc(collection(db, "users", businessId, "audit_logs"));
+        batch.set(logRef, {
+           id: logRef.id,
+           date: new Date().toISOString(),
+           action: "DELETE_INVOICE",
+           details: `Deleted Invoice ${invoice.invoiceNo} and restored stock`,
+           userId: user.uid,
+           userName: user.displayName || 'Staff'
+        });
     }
 
     await batch.commit();
@@ -272,6 +421,20 @@ export const FirebaseService = {
     };
     batch.set(txnRef, newTxn);
 
+    // 5. Audit Log
+    const user = auth.currentUser;
+    if (user) {
+        const logRef = doc(collection(db, "users", businessId, "audit_logs"));
+        batch.set(logRef, {
+           id: logRef.id,
+           date: new Date().toISOString(),
+           action: "CREATE_PURCHASE",
+           details: `Created Purchase Bill ${purchase.invoiceNo} for ₹${purchase.amount}`,
+           userId: user.uid,
+           userName: user.displayName || 'Staff'
+        });
+    }
+
     await batch.commit();
   },
 
@@ -297,6 +460,8 @@ export const FirebaseService = {
        }
     }
 
+    await logAudit(businessId, "PURCHASE_STATUS_UPDATE", `Changed Purchase ${purchase.invoiceNo} status to ${newStatus}`);
+    
     await batch.commit();
   },
 
@@ -332,6 +497,7 @@ export const FirebaseService = {
   deleteEstimate: async (businessId: string, estimateId: string) => {
      const ref = doc(db, "users", businessId, "estimates", estimateId);
      await deleteDoc(ref);
+     await logAudit(businessId, "DELETE_ESTIMATE", `Deleted estimate ${estimateId}`);
   },
 
   add: async (businessId: string, collectionName: string, data: any) => {

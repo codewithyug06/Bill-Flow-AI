@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Estimate, Product, Party, InvoiceItem } from '../types';
 import { Search, Plus, FileText, ArrowRight, Trash2, Printer, Calendar, Clock, CheckCircle2, MoreVertical, X, Copy } from 'lucide-react';
 
@@ -24,6 +24,20 @@ export const Estimates: React.FC<EstimatesProps> = ({ estimates, products, parti
   const [items, setItems] = useState<InvoiceItem[]>([]);
   const [taxRate, setTaxRate] = useState<number>(18);
   const [status, setStatus] = useState<Estimate['status']>('Draft');
+
+  // Esc listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (view === 'create') {
+           // Maybe ask for confirmation? For now just reset view if simple
+           setView('list');
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [view]);
 
   const filteredEstimates = estimates.filter(est => 
     est.customerName.toLowerCase().includes(searchTerm.toLowerCase()) || 

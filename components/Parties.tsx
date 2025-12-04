@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Party, Transaction } from '../types';
 import { Search, Plus, Phone, ArrowDownLeft, ArrowUpRight, History, X, ChevronRight, ShoppingBag, ShoppingCart, Filter, ChevronDown, CreditCard, MapPin, User as UserIcon } from 'lucide-react';
 
@@ -28,6 +28,18 @@ export const Parties: React.FC<PartiesProps> = ({ parties, setParties, transacti
     address: '',
     type: 'Customer' as 'Customer' | 'Supplier'
   });
+
+  // Esc listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowTradeAsk(false);
+        setShowCreateModal(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Filter based on Type, Balance AND Search Query
   const filteredParties = parties.filter(p => {
