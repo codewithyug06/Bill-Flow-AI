@@ -2,7 +2,7 @@ import React from 'react';
 import { ViewState } from '../types';
 import { 
   LayoutDashboard, Users, Package, ShoppingBag, ShoppingCart, 
-  BarChart3, Wallet, Settings, ChevronDown, Plus, 
+  BarChart3, Wallet, Settings, Plus, 
   FileText, X, ScrollText
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
@@ -19,7 +19,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, i
   
   const NavItem = ({ id, label, icon: Icon, badge = '' }: { id: ViewState, label: string, icon: any, badge?: string }) => (
     <button
-      onClick={() => setCurrentView(id)}
+      onClick={() => {
+        setCurrentView(id);
+        if (window.innerWidth < 1024) onClose();
+      }}
       className={`w-full flex items-center justify-between px-4 py-3 mb-1 rounded-xl text-sm nav-transition group relative ${
         currentView === id 
           ? 'bg-brand-500/10 text-white font-semibold' 
@@ -45,20 +48,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, i
     <>
       <aside className={`
         fixed top-0 left-0 h-full w-[280px] bg-slate-950 shadow-2xl z-[60] transform transition-transform duration-300 ease-out border-r border-slate-900 flex flex-col print:hidden
-        ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        {/* Header */}
+        {/* Header - Clickable Brand to Dashboard */}
         <div className="h-20 flex items-center justify-between px-6 border-b border-slate-900">
-           <div className="flex items-center gap-3">
+           <button 
+             onClick={() => setCurrentView('dashboard')}
+             className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+           >
               <div className="w-10 h-10 bg-brand-500/10 rounded-xl flex items-center justify-center border border-brand-500/20">
                 <BrandLogo className="w-6 h-6" variant="white" />
               </div>
-              <div>
+              <div className="text-left">
                 <span className="font-bold text-lg text-white tracking-tight block leading-none">Bill Flux</span>
                 <span className="text-[10px] text-slate-500 font-bold tracking-widest uppercase">Intelligent</span>
               </div>
-           </div>
-           <button onClick={onClose} className="text-slate-500 hover:text-white p-2 md:hidden">
+           </button>
+           <button onClick={onClose} className="text-slate-500 hover:text-white p-2 lg:hidden">
               <X className="w-5 h-5" />
            </button>
         </div>

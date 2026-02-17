@@ -107,54 +107,78 @@ const App: React.FC = () => {
 
   return (
     <div className="flex h-screen bg-[#f8fafc] font-sans overflow-hidden">
+      {/* Sidebar fixed left */}
       <Sidebar currentView={currentView} setCurrentView={handleNavigation} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} userRole={user.role} />
-      <div className="flex-1 flex flex-col h-screen overflow-hidden">
-        <header className="h-20 flex items-center justify-between px-10 bg-white/50 backdrop-blur-md border-b border-slate-100 z-40 print:hidden shrink-0">
+      
+      {/* Main Container - Left padding on large screens to accommodate fixed sidebar */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden lg:pl-[280px]">
+        <header className="h-20 flex items-center justify-between px-6 md:px-10 bg-white/50 backdrop-blur-md border-b border-slate-100 z-40 print:hidden shrink-0">
            <div className="flex items-center gap-4">
-              <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2.5 bg-slate-100 rounded-xl"><Menu className="w-5 h-5"/></button>
-              <div className="hidden md:block">
-                 <h2 className="text-xl font-black text-slate-950 uppercase tracking-tight">{currentView.replace('-', ' ')}</h2>
-                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">{user.role} Portal</p>
-              </div>
+              <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2.5 bg-slate-100 rounded-xl">
+                <Menu className="w-5 h-5 text-slate-600"/>
+              </button>
+              
+              {/* Branding for Mobile & Dashboard Link */}
+              <button 
+                onClick={() => handleNavigation('dashboard')}
+                className="flex items-center gap-3 hover:opacity-80 transition-all group"
+              >
+                 <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                   <BrandLogo className="w-5 h-5 md:w-6 md:h-6" variant="white" />
+                 </div>
+                 <div>
+                    <h2 className="text-base md:text-xl font-black text-slate-950 uppercase tracking-tight leading-none">Bill Flux</h2>
+                    <p className="text-[9px] md:text-[10px] text-brand-600 font-bold uppercase mt-1 tracking-widest">{currentView.replace('-', ' ')}</p>
+                 </div>
+              </button>
            </div>
            
-           <div className="flex items-center gap-4">
-              <button onClick={() => setShowNotifications(!showNotifications)} className="w-10 h-10 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-brand-600 transition-all">
-                <Bell className="w-5 h-5" />
+           <div className="flex items-center gap-3 md:gap-4">
+              <button onClick={() => setShowNotifications(!showNotifications)} className="w-9 h-9 md:w-10 md:h-10 flex items-center justify-center bg-white border border-slate-200 rounded-xl text-slate-500 hover:text-brand-600 transition-all shadow-sm">
+                <Bell className="w-4 h-4 md:w-5 md:h-5" />
               </button>
 
-              <div className="relative border-l border-slate-200 pl-4">
+              <div className="relative border-l border-slate-200 pl-3 md:pl-4">
                  <button onClick={() => setShowProfileMenu(!showProfileMenu)} className="flex items-center gap-3">
                     <div className="text-right hidden sm:block">
                        <p className="text-sm font-black text-slate-900 leading-none">{user.businessName}</p>
                        <p className="text-[10px] text-brand-600 font-bold uppercase mt-1">{user.name}</p>
                     </div>
-                    <div className="w-10 h-10 rounded-xl bg-slate-950 flex items-center justify-center text-white font-black text-xs shadow-premium">
+                    <div className="w-9 h-9 md:w-10 md:h-10 rounded-xl bg-slate-950 flex items-center justify-center text-white font-black text-xs shadow-premium border border-slate-800">
                        {user.name.charAt(0).toUpperCase()}
                     </div>
                  </button>
                  {showProfileMenu && (
-                    <div className="absolute right-0 top-full mt-4 w-64 bg-white rounded-[24px] shadow-2xl border border-slate-50 overflow-hidden animate-in slide-in-from-top-2">
+                    <div className="absolute right-0 top-full mt-4 w-64 bg-white rounded-[24px] shadow-2xl border border-slate-100 overflow-hidden animate-in slide-in-from-top-2">
                        <div className="p-6 bg-slate-50 border-b border-slate-100">
                           <p className="font-black text-slate-900">{user.name}</p>
                           <p className="text-[10px] text-slate-400 font-bold uppercase">{user.role} Account</p>
                        </div>
                        <div className="p-2">
-                          <button onClick={() => { handleNavigation('settings'); setShowProfileMenu(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-all"><SettingsIcon className="w-4 h-4"/> Settings</button>
-                          <button onClick={() => FirebaseService.logoutUser()} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl transition-all"><LogOut className="w-4 h-4"/> Sign Out</button>
+                          <button onClick={() => { handleNavigation('settings'); setShowProfileMenu(false); }} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-slate-600 hover:bg-slate-50 rounded-xl transition-all">
+                            <SettingsIcon className="w-4 h-4"/> Settings
+                          </button>
+                          <button onClick={() => FirebaseService.logoutUser()} className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-red-600 hover:bg-red-50 rounded-xl transition-all">
+                            <LogOut className="w-4 h-4"/> Sign Out
+                          </button>
                        </div>
                     </div>
                  )}
               </div>
            </div>
         </header>
-        <main className="flex-1 overflow-y-auto custom-scrollbar p-10 print:p-0">
+        
+        <main className="flex-1 overflow-y-auto custom-scrollbar p-6 md:p-10 print:p-0">
            <div className="max-w-[1600px] mx-auto pb-20">
               {renderContent()}
            </div>
         </main>
       </div>
-      {isSidebarOpen && <div className="fixed inset-0 bg-slate-950/40 z-[55] backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
+      
+      {/* Mobile Sidebar Overlay */}
+      {isSidebarOpen && <div className="fixed inset-0 bg-slate-950/40 z-[55] backdrop-blur-sm lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
+      
+      {/* Universal Popover Closer */}
       {(showNotifications || showProfileMenu) && <div className="fixed inset-0 z-30" onClick={() => { setShowNotifications(false); setShowProfileMenu(false); }} />}
     </div>
   );
