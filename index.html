@@ -18,24 +18,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Bill Flux - Smart Billing</title>
+    <title>Bill Flux - Smart Business Intelligence</title>
 
     <!-- Google Fonts: Inter -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
-    <!-- Google Analytics (GA4) -->
-    <!-- TODO: Replace G-XXXXXXXXXX with your actual Measurement ID -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){dataLayer.push(arguments);}
-      gtag('js', new Date());
-
-      // TODO: Replace G-XXXXXXXXXX with your actual Measurement ID
-      gtag('config', 'G-J8Y11F0ZCN');
-    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -49,39 +37,54 @@
               brand: {
                 50: '#f0fdfa',
                 100: '#ccfbf1',
+                200: '#99f6e4',
+                300: '#5eead4',
+                400: '#2dd4bf',
                 500: '#14b8a6',
                 600: '#0d9488',
                 700: '#0f766e',
+                800: '#115e59',
                 900: '#134e4a',
                 950: '#042f2e',
+              },
+              accent: {
+                50: '#f5f3ff',
+                500: '#8b5cf6',
+                600: '#7c3aed',
               }
+            },
+            boxShadow: {
+              'premium': '0 10px 40px -10px rgba(0, 0, 0, 0.08)',
+              'glow': '0 0 20px -5px rgba(20, 184, 166, 0.3)',
             }
           }
         }
       }
     </script>
-    <link rel="manifest" href="/manifest.json">
     <style>
-      body { font-family: 'Inter', sans-serif; }
+      body { 
+        font-family: 'Inter', sans-serif;
+        background-color: #f8fafc;
+      }
+      .glass-card {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.3);
+      }
       .custom-scrollbar::-webkit-scrollbar { width: 4px; }
       .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-      .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
-      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+      
+      /* Smooth transitions for navigation */
+      .nav-transition {
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      }
     </style>
   </head>
-  <body class="bg-gray-50 text-gray-900 antialiased selection:bg-brand-100 selection:text-brand-900">
+  <body class="antialiased selection:bg-brand-100 selection:text-brand-900 overflow-hidden">
     <div id="root"></div>
     <script type="module" src="index.tsx"></script>
-    <script>
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(registration => {
-            console.log('SW registered: ', registration);
-          }).catch(registrationError => {
-            console.log('SW registration failed: ', registrationError);
-          });
-        });
-      }
-    </script>
   </body>
 </html>
