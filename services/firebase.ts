@@ -22,14 +22,14 @@ import { getPerformance } from "firebase/performance";
 import { Invoice, Purchase, Product, Party, Transaction, Expense, User, Estimate, AuditLog } from "../types";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA5cDKcWc_sfWihsB4-HszYLDm-RMHylNY",
+  apiKey: "AIzaSyA5cDKcWc_sfWsB4-HszYLDm-RMHylNY",
   authDomain: "bill-flow-ai.firebaseapp.com",
   databaseURL: "https://bill-flow-ai-default-rtdb.firebaseio.com",
   projectId: "bill-flow-ai",
   storageBucket: "bill-flow-ai.firebasestorage.app",
-  messagingSenderId: "78387162300",
+  messagingSenderId: "783871300",
   appId: "1:78387162300:web:2a18d24f73617d49d5b4b9",
-  measurementId: "G-J8Y11F0ZCN"
+  measurementId: "G-Y11F0ZCN"
 };
 
 const app = initializeApp(firebaseConfig);
