@@ -1,4 +1,3 @@
-
 export interface Product {
   id: string;
   name: string;
@@ -6,6 +5,7 @@ export interface Product {
   price: number;
   stock: number;
   unit: string;
+  hsn?: string;
   description?: string;
   barcode?: string;
 }
@@ -13,6 +13,7 @@ export interface Product {
 export interface InvoiceItem {
   productId: string;
   productName: string;
+  hsn?: string;
   quantity: number;
   price: number;
   total: number;
@@ -22,6 +23,8 @@ export interface Invoice {
   id: string;
   invoiceNo: string;
   date: string;
+  dueDate?: string;
+  vehicleNo?: string;
   customerName: string;
   items: InvoiceItem[];
   subtotal: number;
@@ -45,8 +48,9 @@ export interface Estimate {
 }
 
 export interface PurchaseItem {
-  productId: string; // Can be empty if not linked
+  productId: string; 
   name: string;
+  hsn?: string;
   qty: number;
   rate: number;
 }
@@ -68,7 +72,7 @@ export interface Party {
   name: string;
   type: 'Customer' | 'Supplier';
   phone: string;
-  balance: number; // Positive = To Collect, Negative = To Pay
+  balance: number; 
   email?: string;
   gstin?: string;
   address?: string;
@@ -82,7 +86,7 @@ export interface Transaction {
   partyName: string;
   amount: number;
   status?: 'Paid' | 'Unpaid' | 'Pending';
-  description?: string; // For expenses or details
+  description?: string;
 }
 
 export interface Expense {
@@ -99,14 +103,17 @@ export interface User {
   name: string;
   phone: string;
   businessName: string;
+  email?: string;
   gstin?: string;
   address?: string;
-  logoUrl?: string; // Base64 or URL
-  signatureUrl?: string; // Base64 or URL
-  // Multi-user fields
+  logoUrl?: string; 
+  signatureUrl?: string; 
+  bankName?: string;
+  accountNo?: string;
+  ifscCode?: string;
   role: 'owner' | 'staff';
-  businessId: string; // If owner, equals id. If staff, equals owner's id.
-  lastActive?: string; // ISO Timestamp
+  businessId: string;
+  lastActive?: string; 
 }
 
 export interface Notification {
@@ -119,12 +126,6 @@ export interface Notification {
 }
 
 export type ViewState = 'dashboard' | 'parties' | 'items' | 'sales' | 'estimates' | 'purchases' | 'reports' | 'expenses' | 'settings' | 'dummy-invoice';
-
-export interface Insight {
-  title: string;
-  content: string;
-  type: 'positive' | 'negative' | 'neutral' | 'action';
-}
 
 export interface AuditLog {
   id: string;

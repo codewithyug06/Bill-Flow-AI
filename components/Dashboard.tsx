@@ -12,17 +12,25 @@ interface DashboardProps {
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, invoices, purchases, onNavigate }) => {
+  // UNIFIED LOGIC: Match values seen in Sales Register and Purchase Registers
+  
+  // Total Sales Revenue (All Invoices regardless of payment status)
+  const totalRevenue = invoices.reduce((sum, inv) => sum + inv.total, 0);
+
+  // Receivables: Specifically Pending invoices (To Collect)
   const toCollect = invoices
     .filter(inv => inv.status === 'Pending' || inv.status === 'Overdue')
     .reduce((sum, inv) => sum + inv.total, 0);
 
+  // Payables: Unpaid Purchases (To Pay)
   const toPay = purchases
     .filter(pur => pur.status === 'Unpaid')
     .reduce((sum, pur) => sum + (pur.unpaidAmount || pur.amount), 0);
-  
-  const totalRevenue = invoices.reduce((sum, inv) => sum + inv.total, 0);
 
-  const recentTxns = transactions.slice(0, 8);
+  // Sort transactions by date descending so newest are on top
+  const recentTxns = [...transactions]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 8);
 
   const salesData = useMemo(() => {
     const data = [];
@@ -67,7 +75,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, inv
     <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-700">
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Business Overview</h1>
+          <h1 className="text-3xl font-black text-slate-900 tracking-tight">Dashboard Overview</h1>
           <p className="text-slate-500 font-medium text-sm mt-1">Real-time health of your business operations.</p>
         </div>
         <div className="flex bg-white/50 backdrop-blur p-1 rounded-xl border border-slate-200">
@@ -78,6 +86,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, inv
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+        <MetricCard 
+          title="Total Sales" 
+          amount={totalRevenue} 
+          subtitle="Lifetime Earnings" 
+          icon={Wallet}
+          gradient="bg-gradient-to-br from-slate-800 to-slate-950"
+          onClick={() => onNavigate('sales')}
+        />
         <MetricCard 
           title="To Collect" 
           amount={toCollect} 
@@ -94,22 +110,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ transactions, parties, inv
           gradient="bg-gradient-to-br from-rose-500 to-red-700"
           onClick={() => onNavigate('purchases')}
         />
-        <MetricCard 
-          title="Total Revenue" 
-          amount={totalRevenue} 
-          subtitle="Lifetime Earnings" 
-          icon={Wallet}
-          gradient="bg-gradient-to-br from-slate-800 to-slate-950"
-          onClick={() => onNavigate('reports')}
-        />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
         <div className="lg:col-span-3 bg-white rounded-[24px] shadow-premium border border-slate-100 p-8">
            <div className="flex justify-between items-center mb-10">
               <div>
-                 <h3 className="font-black text-slate-900 text-lg uppercase tracking-tight">Revenue Analytics</h3>
-                 <p className="text-xs text-slate-400 font-medium">Daily sales performance</p>
+                 <h3 className="font-black text-slate-900 text-lg uppercase tracking-tight">Sales Analytics</h3>
+                 <p className="text-xs text-slate-400 font-medium">Daily revenue trend</p>
               </div>
            </div>
            

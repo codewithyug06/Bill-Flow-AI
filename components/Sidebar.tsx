@@ -1,9 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ViewState } from '../types';
 import { 
   LayoutDashboard, Users, Package, ShoppingBag, ShoppingCart, 
   BarChart3, Wallet, Settings, Plus, 
-  FileText, X, ScrollText
+  FileText, X, ScrollText, ArrowRightLeft
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
 
@@ -16,12 +16,13 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, isOpen, onClose, userRole = 'owner' }) => {
-  
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+
   const NavItem = ({ id, label, icon: Icon, badge = '' }: { id: ViewState, label: string, icon: any, badge?: string }) => (
     <button
       onClick={() => {
         setCurrentView(id);
-        if (window.innerWidth < 1024) onClose();
+        if (window.innerWidth < 768) onClose();
       }}
       className={`w-full flex items-center justify-between px-4 py-3 mb-1 rounded-xl text-sm nav-transition group relative ${
         currentView === id 
@@ -48,9 +49,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, i
     <>
       <aside className={`
         fixed top-0 left-0 h-full w-[280px] bg-slate-950 shadow-2xl z-[60] transform transition-transform duration-300 ease-out border-r border-slate-900 flex flex-col print:hidden
-        lg:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+        md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
-        {/* Header - Clickable Brand to Dashboard */}
         <div className="h-20 flex items-center justify-between px-6 border-b border-slate-900">
            <button 
              onClick={() => setCurrentView('dashboard')}
@@ -64,23 +64,38 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, i
                 <span className="text-[10px] text-slate-500 font-bold tracking-widest uppercase">Intelligent</span>
               </div>
            </button>
-           <button onClick={onClose} className="text-slate-500 hover:text-white p-2 lg:hidden">
+           <button onClick={onClose} className="text-slate-500 hover:text-white p-2 md:hidden">
               <X className="w-5 h-5" />
            </button>
         </div>
 
-        {/* Quick Action */}
-        <div className="px-4 py-6">
+        <div className="px-4 py-6 relative">
           <button 
-            onClick={() => setCurrentView('sales')}
-            className="w-full bg-brand-600 hover:bg-brand-500 text-white py-3 px-4 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg shadow-brand-950/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
+            onClick={() => setShowCreateMenu(!showCreateMenu)}
+            className="w-full bg-brand-600 hover:bg-brand-500 text-white py-3.5 px-4 rounded-xl flex items-center justify-center gap-2 font-bold shadow-lg shadow-brand-950/20 transition-all hover:scale-[1.02] active:scale-[0.98]"
           >
             <Plus className="w-5 h-5" />
-            <span>Create Invoice</span>
+            <span>Create New...</span>
           </button>
+
+          {showCreateMenu && (
+            <div className="absolute left-4 right-4 top-full mt-2 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl z-50 overflow-hidden animate-in slide-in-from-top-2">
+               <button 
+                 onClick={() => { setCurrentView('sales'); setShowCreateMenu(false); }}
+                 className="w-full flex items-center gap-3 px-4 py-4 text-sm font-bold text-slate-300 hover:bg-brand-600 hover:text-white transition-all text-left border-b border-slate-800"
+               >
+                 <ShoppingBag className="w-5 h-5" /> Create Sales Bill
+               </button>
+               <button 
+                 onClick={() => { setCurrentView('purchases'); setShowCreateMenu(false); }}
+                 className="w-full flex items-center gap-3 px-4 py-4 text-sm font-bold text-slate-300 hover:bg-purple-600 hover:text-white transition-all text-left"
+               >
+                 <ShoppingCart className="w-5 h-5" /> Record Purchase Bill
+               </button>
+            </div>
+          )}
         </div>
 
-        {/* Navigation */}
         <nav className="flex-1 overflow-y-auto custom-scrollbar px-3 space-y-8 pb-10">
           <div>
             <div className="px-4 mb-3 text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">Management</div>
@@ -90,10 +105,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, i
           </div>
           
           <div>
-            <div className="px-4 mb-3 text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">Sales & Operations</div>
-            <NavItem id="sales" label="Sales Invoices" icon={ShoppingBag} />
+            <div className="px-4 mb-3 text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em]">Registers</div>
+            <NavItem id="sales" label="Sales Register" icon={ShoppingBag} />
+            <NavItem id="purchases" label="Purchase Register" icon={ShoppingCart} />
             <NavItem id="estimates" label="Quotations" icon={ScrollText} />
-            <NavItem id="purchases" label="Purchase Bills" icon={ShoppingCart} />
             <NavItem id="dummy-invoice" label="Rough Billing" icon={FileText} />
           </div>
           
@@ -104,7 +119,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, i
           </div>
         </nav>
 
-        {/* Footer Settings */}
         {userRole === 'owner' && (
           <div className="p-4 mt-auto border-t border-slate-900">
             <button 
@@ -121,6 +135,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ currentView, setCurrentView, i
           </div>
         )}
       </aside>
+      
+      {showCreateMenu && <div className="fixed inset-0 z-40" onClick={() => setShowCreateMenu(false)} />}
     </>
   );
 };

@@ -110,23 +110,23 @@ const App: React.FC = () => {
       {/* Sidebar fixed left */}
       <Sidebar currentView={currentView} setCurrentView={handleNavigation} isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} userRole={user.role} />
       
-      {/* Main Container - Left padding on large screens to accommodate fixed sidebar */}
-      <div className="flex-1 flex flex-col h-screen overflow-hidden lg:pl-[280px]">
+      {/* Main Container - Left padding on MD+ screens to accommodate fixed sidebar */}
+      <div className="flex-1 flex flex-col h-screen overflow-hidden md:pl-[280px]">
         <header className="h-20 flex items-center justify-between px-6 md:px-10 bg-white/50 backdrop-blur-md border-b border-slate-100 z-40 print:hidden shrink-0">
            <div className="flex items-center gap-4">
-              <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2.5 bg-slate-100 rounded-xl">
+              <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-2.5 bg-slate-100 rounded-xl">
                 <Menu className="w-5 h-5 text-slate-600"/>
               </button>
               
-              {/* Branding for Mobile & Dashboard Link */}
+              {/* BRANDING: Clicking here navigates to Dashboard */}
               <button 
                 onClick={() => handleNavigation('dashboard')}
                 className="flex items-center gap-3 hover:opacity-80 transition-all group"
               >
-                 <div className="w-8 h-8 md:w-10 md:h-10 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
+                 <div className="w-9 h-9 md:w-10 md:h-10 bg-slate-900 rounded-xl flex items-center justify-center shadow-lg group-hover:scale-105 transition-transform">
                    <BrandLogo className="w-5 h-5 md:w-6 md:h-6" variant="white" />
                  </div>
-                 <div>
+                 <div className="text-left">
                     <h2 className="text-base md:text-xl font-black text-slate-950 uppercase tracking-tight leading-none">Bill Flux</h2>
                     <p className="text-[9px] md:text-[10px] text-brand-600 font-bold uppercase mt-1 tracking-widest">{currentView.replace('-', ' ')}</p>
                  </div>
@@ -176,7 +176,7 @@ const App: React.FC = () => {
       </div>
       
       {/* Mobile Sidebar Overlay */}
-      {isSidebarOpen && <div className="fixed inset-0 bg-slate-950/40 z-[55] backdrop-blur-sm lg:hidden" onClick={() => setIsSidebarOpen(false)} />}
+      {isSidebarOpen && <div className="fixed inset-0 bg-slate-950/40 z-[55] backdrop-blur-sm md:hidden" onClick={() => setIsSidebarOpen(false)} />}
       
       {/* Universal Popover Closer */}
       {(showNotifications || showProfileMenu) && <div className="fixed inset-0 z-30" onClick={() => { setShowNotifications(false); setShowProfileMenu(false); }} />}
